@@ -17,8 +17,9 @@ RUN apk add --no-cache \
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with fallback for sqlite3
+RUN npm ci --build-from-source || \
+    (npm install --verbose && npm rebuild sqlite3)
 
 # Copy source code
 COPY src/ ./src/
