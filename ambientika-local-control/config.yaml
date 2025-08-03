@@ -46,4 +46,5 @@ schema:
   rest_api_port: int(1,65535)
   local_socket_port: int(1,65535)
   udp_broadcast_start_port: int(1,65535)
+  log_level: list(trace|debug|info|notice|warning|error|fatal)?
 source_url: https://github.com/alexlenk/ambientika-local-control
