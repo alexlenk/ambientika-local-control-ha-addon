@@ -1,3 +1,5 @@
+ARG BUILD_ARCH=amd64
+
 #Build stage
 FROM node:22-alpine AS build
 
@@ -14,9 +16,8 @@ COPY . .
 
 RUN npm run build
 
-#Production stage - Use Home Assistant base for add-on
-ARG BUILD_ARCH
-FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.19
+#Production stage - Use Home Assistant base for add-on  
+FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.18
 
 WORKDIR /app
 
