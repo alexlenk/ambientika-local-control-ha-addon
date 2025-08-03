@@ -5,18 +5,17 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Install build dependencies for native modules like sqlite3
-RUN apk add --no-cache python3 py3-setuptools make g++ && \
-    npm config set cache-max 0
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
 
-# Copy package files first for better caching
+# Copy package files for dependency installation
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies (cached layer if package.json unchanged)
-RUN npm ci --verbose
+# Install all dependencies
+RUN npm ci
 
-# Copy source files
+# Copy source code
 COPY src/ ./src/
 
 # Build the application
@@ -27,24 +26,18 @@ FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.18
 
 WORKDIR /app
 
-# Install only runtime dependencies (no build tools needed)
+# Install Node.js runtime
 RUN apk add --no-cache nodejs npm
 
-# Copy package files for production install
+# Copy package files and install production dependencies
 COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --omit=dev --verbose && \
-    npm cache clean --force
+RUN npm ci --omit=dev
 
 # Copy built application from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy run script
+# Copy and set up run script
 COPY run.sh /
 RUN chmod a+x /run.sh
-
-# Set proper permissions
-USER root
 
 CMD ["/run.sh"]
