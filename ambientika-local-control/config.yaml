@@ -32,6 +32,7 @@ options:
   rest_api_port: 3000
   local_socket_port: 11000
   udp_broadcast_start_port: 45000
+  log_level: info
 schema:
   mqtt_host: str
   mqtt_port: int(1,65535)
