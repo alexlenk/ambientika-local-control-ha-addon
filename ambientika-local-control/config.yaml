@@ -1,0 +1,48 @@
+name: Ambientika Local Control
+version: "1.0.0"
+slug: ambientika_local_control
+description: Local control for Ambientika devices with MQTT integration
+url: https://github.com/sragas/ambientika-local-control
+arch:
+  - armhf
+  - armv7
+  - aarch64
+  - amd64
+  - i386
+init: false
+host_network: true
+privileged:
+  - NET_ADMIN
+ports:
+  3000/tcp: 3000
+  11000/tcp: 11000
+ports_description:
+  3000/tcp: REST API port
+  11000/tcp: Device communication port
+options:
+  mqtt_host: "core-mosquitto"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  zone_count: 3
+  cloud_sync_enabled: false
+  cloud_host: "185.214.203.87"
+  cloud_port: 11000
+  device_stale_timeout: 90
+  rest_api_port: 3000
+  local_socket_port: 11000
+  udp_broadcast_start_port: 45000
+schema:
+  mqtt_host: str
+  mqtt_port: int(1,65535)
+  mqtt_username: str?
+  mqtt_password: password?
+  zone_count: int(1,10)
+  cloud_sync_enabled: bool
+  cloud_host: str?
+  cloud_port: int(1,65535)?
+  device_stale_timeout: int(30,300)
+  rest_api_port: int(1,65535)
+  local_socket_port: int(1,65535)
+  udp_broadcast_start_port: int(1,65535)
+image: ghcr.io/sragas/ambientika-local-control
