@@ -23,7 +23,7 @@ FROM node:22-alpine AS production
 WORKDIR /app
 
 # Install runtime dependencies for native modules like sqlite3
-RUN apk add --no-cache python3 py3-setuptools make g++
+RUN apk add --no-cache python3 py3-setuptools make g++ jq bash
 
 COPY package*.json ./
 

@@ -1,21 +1,39 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/bash
 
 # Get configuration from Home Assistant
 CONFIG_PATH=/data/options.json
 
-# Read configuration values
-MQTT_HOST=$(bashio::config 'mqtt_host')
-MQTT_PORT=$(bashio::config 'mqtt_port')
-MQTT_USERNAME=$(bashio::config 'mqtt_username')
-MQTT_PASSWORD=$(bashio::config 'mqtt_password')
-ZONE_COUNT=$(bashio::config 'zone_count')
-CLOUD_SYNC_ENABLED=$(bashio::config 'cloud_sync_enabled')
-CLOUD_HOST=$(bashio::config 'cloud_host')
-CLOUD_PORT=$(bashio::config 'cloud_port')
-DEVICE_STALE_TIMEOUT=$(bashio::config 'device_stale_timeout')
-REST_API_PORT=$(bashio::config 'rest_api_port')
-LOCAL_SOCKET_PORT=$(bashio::config 'local_socket_port')
-UDP_BROADCAST_START_PORT=$(bashio::config 'udp_broadcast_start_port')
+echo "🚀 Starting Ambientika Local Control..."
+echo "📋 Reading configuration from: $CONFIG_PATH"
+
+# Check if config file exists
+if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo "❌ Configuration file not found: $CONFIG_PATH"
+    echo "📄 Available files in /data:"
+    ls -la /data/ || echo "Cannot list /data directory"
+    echo "🔧 Using default configuration..."
+    CONFIG_PATH="/data/options.json"
+fi
+
+# Read configuration values using jq
+MQTT_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_host // "core-mosquitto"')
+MQTT_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_port // 1883')
+MQTT_USERNAME=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_username // ""')
+MQTT_PASSWORD=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_password // ""')
+ZONE_COUNT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.zone_count // 3')
+CLOUD_SYNC_ENABLED=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_sync_enabled // false')
+CLOUD_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_host // "185.214.203.87"')
+CLOUD_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_port // 11000')
+DEVICE_STALE_TIMEOUT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.device_stale_timeout // 90')
+REST_API_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.rest_api_port // 3000')
+LOCAL_SOCKET_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.local_socket_port // 11000')
+UDP_BROADCAST_START_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.udp_broadcast_start_port // 45000')
+
+echo "🔧 Configuration loaded:"
+echo "  MQTT: $MQTT_HOST:$MQTT_PORT"
+echo "  Zones: $ZONE_COUNT"
+echo "  Local Socket: $LOCAL_SOCKET_PORT"
+echo "  REST API: $REST_API_PORT"
 
 # Build MQTT connection string
 if [[ -n "$MQTT_USERNAME" && -n "$MQTT_PASSWORD" ]]; then
@@ -85,12 +103,19 @@ WEATHER_UPDATE_TOPIC=ambientika/weather
 EOF
 
 # Log configuration
-bashio::log.info "Starting Ambientika Local Control..."
-bashio::log.info "MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
-bashio::log.info "Zone Count: ${ZONE_COUNT}"
-bashio::log.info "Cloud Sync: ${CLOUD_SYNC_ENABLED}"
-bashio::log.info "Database: /data/devices.db"
+echo "📊 Final configuration:"
+echo "  MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
+echo "  Zone Count: ${ZONE_COUNT}"
+echo "  Cloud Sync: ${CLOUD_SYNC_ENABLED}"
+echo "  Database: /data/devices.db"
+echo "  .env file created successfully"
+
+echo "🎯 Starting Ambientika Local Control application..."
+echo "📂 Working directory: $(pwd)"
+echo "📁 App files:"
+ls -la /app/
 
 # Start the application
 cd /app
+echo "🚀 Executing: node dist/index.js"
 exec node dist/index.js
