@@ -15,8 +15,8 @@ COPY . .
 RUN npm run build
 
 #Production stage - Use Home Assistant base for add-on
-ARG BUILD_ARCH=amd64
-FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.20
+ARG BUILD_ARCH
+FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.19
 
 WORKDIR /app
 
