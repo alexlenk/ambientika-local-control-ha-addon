@@ -45,10 +45,4 @@ schema:
   rest_api_port: int(1,65535)
   local_socket_port: int(1,65535)
   udp_broadcast_start_port: int(1,65535)
-build_from:
-  aarch64: ghcr.io/home-assistant/aarch64-base:3.18
-  amd64: ghcr.io/home-assistant/amd64-base:3.18
-  armhf: ghcr.io/home-assistant/armhf-base:3.18
-  armv7: ghcr.io/home-assistant/armv7-base:3.18
-  i386: ghcr.io/home-assistant/i386-base:3.18
 source_url: https://github.com/alexlenk/ambientika-local-control
