@@ -5,25 +5,20 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Install build dependencies for native modules (sqlite3, node-ble)
+# Install build dependencies for native modules (sqlite3 only)
 RUN apk add --no-cache \
     python3 \
     py3-setuptools \
     make \
     g++ \
-    linux-headers \
-    libc-dev \
-    pkgconfig \
-    dbus-dev \
-    glib-dev \
-    eudev-dev
+    linux-headers
 
 # Copy package files for dependency installation
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install all dependencies with verbose logging
-RUN npm ci --verbose
+# Install dependencies
+RUN npm ci
 
 # Copy source code
 COPY src/ ./src/
@@ -36,13 +31,8 @@ FROM ghcr.io/home-assistant/${BUILD_ARCH}-base:3.18
 
 WORKDIR /app
 
-# Install Node.js runtime and BLE dependencies
-RUN apk add --no-cache \
-    nodejs \
-    npm \
-    dbus \
-    bluez \
-    glib
+# Install Node.js runtime
+RUN apk add --no-cache nodejs npm
 
 # Copy package files and install production dependencies
 COPY package*.json ./
