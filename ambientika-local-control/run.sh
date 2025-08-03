@@ -3,16 +3,28 @@
 # Get configuration from Home Assistant
 CONFIG_PATH=/data/options.json
 
-echo "🚀 Starting Ambientika Local Control..."
-echo "📋 Reading configuration from: $CONFIG_PATH"
+# Logging functions that write to stderr (Home Assistant captures this)
+log_info() {
+    echo "[INFO] $1" >&2
+}
+
+log_error() {
+    echo "[ERROR] $1" >&2
+}
+
+log_debug() {
+    echo "[DEBUG] $1" >&2
+}
+
+log_info "🚀 Starting Ambientika Local Control..."
+log_info "📋 Reading configuration from: $CONFIG_PATH"
 
 # Check if config file exists
 if [[ ! -f "$CONFIG_PATH" ]]; then
-    echo "❌ Configuration file not found: $CONFIG_PATH"
-    echo "📄 Available files in /data:"
-    ls -la /data/ || echo "Cannot list /data directory"
-    echo "🔧 Using default configuration..."
-    CONFIG_PATH="/data/options.json"
+    log_error "❌ Configuration file not found: $CONFIG_PATH"
+    log_info "📄 Available files in /data:"
+    ls -la /data/ >&2 || log_error "Cannot list /data directory"
+    log_info "🔧 Using default configuration..."
 fi
 
 # Read configuration values using jq
@@ -29,11 +41,11 @@ REST_API_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.rest_api_port // 3000')
 LOCAL_SOCKET_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.local_socket_port // 11000')
 UDP_BROADCAST_START_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.udp_broadcast_start_port // 45000')
 
-echo "🔧 Configuration loaded:"
-echo "  MQTT: $MQTT_HOST:$MQTT_PORT"
-echo "  Zones: $ZONE_COUNT"
-echo "  Local Socket: $LOCAL_SOCKET_PORT"
-echo "  REST API: $REST_API_PORT"
+log_info "🔧 Configuration loaded:"
+log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
+log_info "  Zones: $ZONE_COUNT"
+log_info "  Local Socket: $LOCAL_SOCKET_PORT"
+log_info "  REST API: $REST_API_PORT"
 
 # Build MQTT connection string
 if [[ -n "$MQTT_USERNAME" && -n "$MQTT_PASSWORD" ]]; then
@@ -103,19 +115,21 @@ WEATHER_UPDATE_TOPIC=ambientika/weather
 EOF
 
 # Log configuration
-echo "📊 Final configuration:"
-echo "  MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
-echo "  Zone Count: ${ZONE_COUNT}"
-echo "  Cloud Sync: ${CLOUD_SYNC_ENABLED}"
-echo "  Database: /data/devices.db"
-echo "  .env file created successfully"
+log_info "📊 Final configuration:"
+log_info "  MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
+log_info "  Zone Count: ${ZONE_COUNT}"
+log_info "  Cloud Sync: ${CLOUD_SYNC_ENABLED}"
+log_info "  Database: /data/devices.db"
+log_info "  .env file created successfully"
 
-echo "🎯 Starting Ambientika Local Control application..."
-echo "📂 Working directory: $(pwd)"
-echo "📁 App files:"
-ls -la /app/
+log_info "🎯 Starting Ambientika Local Control application..."
+log_info "📂 Working directory: $(pwd)"
+log_info "📁 App files:"
+ls -la /app/ >&2
 
 # Start the application
 cd /app
-echo "🚀 Executing: node dist/index.js"
-exec node dist/index.js
+log_info "🚀 Executing: node dist/index.js"
+
+# Redirect both stdout and stderr to ensure logs are captured
+exec node dist/index.js 2>&1
