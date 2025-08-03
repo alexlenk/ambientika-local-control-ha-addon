@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README*
+DOCS*
+
+# Development
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# Build output
+dist/
+build/
+
+# Node.js
+node_modules/
+.npm
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Environment variables
+.env*
+
+# MacOS
+.DS_Store
+
+# Testing
+test/
+tests/
+*.test.js
+*.test.ts
