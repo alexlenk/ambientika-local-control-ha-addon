@@ -480,7 +480,9 @@ export class MqttService {
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
             case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
-                dto.fanSpeed = messageString.toUpperCase();
+                // Map auto to medium, keep other values as-is
+                const fanSpeedUpper = messageString.toUpperCase();
+                dto.fanSpeed = fanSpeedUpper === 'AUTO' ? 'MEDIUM' : fanSpeedUpper;
                 return dto;
             case process.env.MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.operatingMode = messageString === 'fan_only' ? OperatingMode.LAST.toString() :
