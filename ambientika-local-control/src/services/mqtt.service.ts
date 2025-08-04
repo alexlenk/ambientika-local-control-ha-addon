@@ -205,8 +205,12 @@ export class MqttService {
 
     private sendDeviceFanSpeed(device: Device) {
         if (device.fanSpeed) {
+            // Check if we have a stored command that should override the device's reported fan speed
+            const storedFanSpeed = this.deviceStorageService.getStoredFanSpeed(device.serialNumber);
+            const fanSpeedToPublish = storedFanSpeed?.toLowerCase() || device.fanSpeed.toLowerCase();
+            
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_STATE_TOPIC, device.serialNumber),
-                device.fanSpeed.toLowerCase())
+                fanSpeedToPublish)
         }
     }
 

@@ -73,14 +73,26 @@ export class DeviceStorageService {
             
             // Check if we have a pending command for this device
             const lastCommand = this.lastSentCommands.get(device.serialNumber);
-            if (lastCommand && lastCommand.operatingMode) {
-                // Override the device's reported operating mode with our command
-                if (device.operatingMode !== lastCommand.operatingMode) {
+            if (lastCommand) {
+                let commandApplied = true;
+                
+                // Check operating mode override
+                if (lastCommand.operatingMode && device.operatingMode !== lastCommand.operatingMode) {
                     this.log.debug(`Overriding device ${device.serialNumber} operating mode from ${device.operatingMode} to ${lastCommand.operatingMode} (pending command)`);
                     device.operatingMode = lastCommand.operatingMode;
-                } else {
-                    // Device has applied our command, remove it from pending
-                    this.log.debug(`Device ${device.serialNumber} has applied command ${lastCommand.operatingMode}, removing from pending`);
+                    commandApplied = false;
+                }
+                
+                // Check fan speed override
+                if (lastCommand.fanSpeed && device.fanSpeed !== lastCommand.fanSpeed.toUpperCase()) {
+                    this.log.debug(`Overriding device ${device.serialNumber} fan speed from ${device.fanSpeed} to ${lastCommand.fanSpeed} (pending command)`);
+                    device.fanSpeed = lastCommand.fanSpeed.toUpperCase();
+                    commandApplied = false;
+                }
+                
+                // Remove command if device has applied it
+                if (commandApplied) {
+                    this.log.debug(`Device ${device.serialNumber} has applied command, removing from pending`);
                     this.lastSentCommands.delete(device.serialNumber);
                 }
             }
@@ -91,6 +103,24 @@ export class DeviceStorageService {
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
             this.log.debug(`Command sent to device ${serialNumber}, storing for persistence: %o`, opMode);
             this.lastSentCommands.set(serialNumber, opMode);
+            
+            // Immediately trigger MQTT update with the commanded values
+            this.findExistingDeviceBySerialNumber(serialNumber, (dto: DeviceDto | undefined) => {
+                if (dto) {
+                    const device = this.deviceMapper.deviceFromDto(dto);
+                    
+                    // Override with commanded values
+                    if (opMode.operatingMode) {
+                        device.operatingMode = opMode.operatingMode;
+                    }
+                    if (opMode.fanSpeed) {
+                        device.fanSpeed = opMode.fanSpeed.toUpperCase();
+                    }
+                    
+                    // Trigger immediate MQTT update
+                    this.eventService.deviceStatusUpdate(device);
+                }
+            });
         });
     }
 
@@ -101,6 +131,11 @@ export class DeviceStorageService {
     getStoredOperatingMode(serialNumber: string): string | undefined {
         const command = this.lastSentCommands.get(serialNumber);
         return command?.operatingMode;
+    }
+
+    getStoredFanSpeed(serialNumber: string): string | undefined {
+        const command = this.lastSentCommands.get(serialNumber);
+        return command?.fanSpeed;
     }
 
     saveDevice(device: Device) {
