@@ -200,8 +200,10 @@ export class MqttService {
     }
 
     private sendDeviceFanSpeed(device: Device) {
-        this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_STATE_TOPIC, device.serialNumber),
-            device.fanSpeed.toLowerCase())
+        if (device.fanSpeed) {
+            this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_STATE_TOPIC, device.serialNumber),
+                device.fanSpeed.toLowerCase())
+        }
     }
 
     private sendDeviceTemperature(device: Device) {
