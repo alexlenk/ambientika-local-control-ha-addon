@@ -1,7 +1,7 @@
 {
-  "name": "tcp-proxy",
+  "name": "ambientika-local-control-ha-addon",
   "version": "1.0.0",
-  "description": "",
+  "description": "Home Assistant add-on based on ambientika-local-control by sragas",
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --poll ./src/index.ts",
@@ -9,7 +9,14 @@
     "start": "npm run build && node dist/index.js",
     "lint": "eslint ."
   },
-  "author": "",
+  "author": "Alex Lenk",
+  "contributors": [
+    "sragas (original ambientika-local-control)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexlenk/ambientika-local-control-ha-addon"
+  },
   "license": "ISC",
   "dependencies": {
     "@js-joda/core": "^5.6.3",
