@@ -102,6 +102,10 @@ export class MqttService {
             this.sendFilterStatus(device);
             this.sendNightAlarm(device);
             this.sendLightSensitivity(device);
+            
+            // Also publish fan status from device data as fallback
+            this.sendFanStatusFromDevice(device);
+            this.sendFanModeFromDevice(device);
         });
     }
 
@@ -275,6 +279,27 @@ export class MqttService {
     private sendLightSensitivity(device: Device) {
         this.publish(this.getDevicePublishTopic(process.env.LIGHT_SENSITIVITY_TOPIC, device.serialNumber),
             device.lightSensitivity.toString())
+    }
+
+    private sendFanStatusFromDevice(device: Device) {
+        // Derive fan status from device operating mode as fallback
+        let fanStatus = 'OFF';
+        if (device.operatingMode !== 'OFF') {
+            fanStatus = device.fanSpeed === 'HIGH' ? 'HIGH' : 
+                       device.fanSpeed === 'MEDIUM' ? 'MEDIUM' : 'LOW';
+        }
+        this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, device.serialNumber),
+            fanStatus);
+    }
+
+    private sendFanModeFromDevice(device: Device) {
+        // Derive fan mode from device operating mode as fallback
+        let fanMode = 'OFF';
+        if (device.operatingMode !== 'OFF') {
+            fanMode = device.operatingMode === 'AUTO' ? 'AUTO' : 'MANUAL';
+        }
+        this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, device.serialNumber),
+            fanMode);
     }
 
     private sendFanStatus(deviceBroadcastStatus: DeviceBroadcastStatus) {
