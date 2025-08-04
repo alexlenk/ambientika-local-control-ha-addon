@@ -27,7 +27,12 @@ export class DeviceMapper {
         this.buffer = data;
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
         const operatingMode = OperatingMode[this.getIntFromBufferSlice(8, 9)];
-        const fanSpeed = FanSpeed[this.getIntFromBufferSlice(9, 10)];
+        const fanSpeedValue = this.getIntFromBufferSlice(9, 10);
+        const fanSpeed = FanSpeed[fanSpeedValue];
+        if (fanSpeed === undefined) {
+            this.log.warn(`Unknown fanSpeed value ${fanSpeedValue} from buffer, defaulting to MEDIUM`);
+        }
+        const finalFanSpeed = fanSpeed || FanSpeed.MEDIUM;
         const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(10, 11)];
         const temperature = this.getIntFromBufferSlice(11, 12);
         const humidity = this.getIntFromBufferSlice(12, 13);
@@ -42,7 +47,7 @@ export class DeviceMapper {
         return new Device(
             serialNumber,
             operatingMode,
-            fanSpeed,
+            finalFanSpeed,
             humidityLevel,
             temperature,
             humidity,
