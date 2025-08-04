@@ -40,12 +40,14 @@ DEVICE_STALE_TIMEOUT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.device_stale_tim
 REST_API_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.rest_api_port // 3000')
 LOCAL_SOCKET_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.local_socket_port // 11000')
 UDP_BROADCAST_START_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.udp_broadcast_start_port // 45000')
+LOG_LEVEL=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_level // "info"')
 
 log_info "🔧 Configuration loaded:"
 log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
 log_info "  Zones: $ZONE_COUNT"
 log_info "  Local Socket: $LOCAL_SOCKET_PORT"
 log_info "  REST API: $REST_API_PORT"
+log_info "  Log Level: $LOG_LEVEL"
 
 # Build MQTT connection string
 if [[ -n "$MQTT_USERNAME" && -n "$MQTT_PASSWORD" ]]; then
@@ -58,6 +60,7 @@ fi
 cat > /app/.env << EOF
 LOCAL_SOCKET_PORT=${LOCAL_SOCKET_PORT}
 REST_API_PORT=${REST_API_PORT}
+LOG_LEVEL=${LOG_LEVEL}
 
 CLOUD_SYNC_ENABLED=${CLOUD_SYNC_ENABLED}
 REMOTE_CLOUD_SOCKET_PORT=${CLOUD_PORT}
