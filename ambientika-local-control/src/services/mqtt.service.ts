@@ -127,64 +127,66 @@ export class MqttService {
         const enabled = process.env.HOME_ASSISTANT_AUTO_DISCOVERY === 'true';
         if (enabled) {
             this.log.debug('Home Assistant MQTT auto discovery enabled, sending discovery messages')
-            const climateDiscovery = this.hAAutoDiscoveryService.getClimateDeviceDiscoveryMessage(device);
-            let topic = this.getDevicePublishTopic(process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_TOPIC,
-                device.serialNumber);
-            this.publish(topic, climateDiscovery);
+            
+            // Send discovery messages asynchronously to avoid blocking
+            setImmediate(() => {
+                const climateDiscovery = this.hAAutoDiscoveryService.getClimateDeviceDiscoveryMessage(device);
+                let topic = this.getDevicePublishTopic(process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_TOPIC,
+                    device.serialNumber);
+                this.publish(topic, climateDiscovery);
 
-            const alarmDiscovery = this.hAAutoDiscoveryService.getNightAlarmBinarySensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BINARY_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'nightalarm');
-            this.publish(topic, alarmDiscovery);
-
-            const humidityAlarmDiscovery = this.hAAutoDiscoveryService.getHumidityAlarmBinarySensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BINARY_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'humidityalarm');
-            this.publish(topic, humidityAlarmDiscovery);
-
-            if (process.env.CLOUD_SYNC_ENABLED === 'true') {
-                const cloudAvailabilityDiscovery = this.hAAutoDiscoveryService.getCloudAvailabilityBinarySensorMessage(device);
+                const alarmDiscovery = this.hAAutoDiscoveryService.getNightAlarmBinarySensorMessage(device);
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BINARY_SENSOR_DISCOVERY_TOPIC,
-                    device.serialNumber, 'cloudavailability');
-                this.publish(topic, cloudAvailabilityDiscovery);
-            }
+                    device.serialNumber, 'nightalarm');
+                this.publish(topic, alarmDiscovery);
 
-            const airQualityDiscovery = this.hAAutoDiscoveryService.getAirQualitySensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'airquality');
-            this.publish(topic, airQualityDiscovery);
+                const humidityAlarmDiscovery = this.hAAutoDiscoveryService.getHumidityAlarmBinarySensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BINARY_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'humidityalarm');
+                this.publish(topic, humidityAlarmDiscovery);
 
-            const filterStatusDiscovery = this.hAAutoDiscoveryService.getFilterStatusSensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'filterstatus');
-            this.publish(topic, filterStatusDiscovery);
+                if (process.env.CLOUD_SYNC_ENABLED === 'true') {
+                    const cloudAvailabilityDiscovery = this.hAAutoDiscoveryService.getCloudAvailabilityBinarySensorMessage(device);
+                    topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BINARY_SENSOR_DISCOVERY_TOPIC,
+                        device.serialNumber, 'cloudavailability');
+                    this.publish(topic, cloudAvailabilityDiscovery);
+                }
 
-            const humidityDiscovery = this.hAAutoDiscoveryService.getHumidityStatusSensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'humidity');
-            this.publish(topic, humidityDiscovery);
+                const airQualityDiscovery = this.hAAutoDiscoveryService.getAirQualitySensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'airquality');
+                this.publish(topic, airQualityDiscovery);
 
-            const fanStatusDiscovery = this.hAAutoDiscoveryService.getFanStatusSensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'fanstatus');
-            this.publish(topic, fanStatusDiscovery);
+                const filterStatusDiscovery = this.hAAutoDiscoveryService.getFilterStatusSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'filterstatus');
+                this.publish(topic, filterStatusDiscovery);
 
-            const fanModeDiscovery = this.hAAutoDiscoveryService.getFanModeSensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
-                device.serialNumber, 'fanmode');
-            this.publish(topic, fanModeDiscovery);
+                const humidityDiscovery = this.hAAutoDiscoveryService.getHumidityStatusSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'humidity');
+                this.publish(topic, humidityDiscovery);
 
-            const filterResetButtonDiscovery = this.hAAutoDiscoveryService.getFilterResetButtonMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BUTTON_DISCOVERY_TOPIC,
-                device.serialNumber, 'filterreset');
-            this.publish(topic, filterResetButtonDiscovery);
+                const fanStatusDiscovery = this.hAAutoDiscoveryService.getFanStatusSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'fanstatus');
+                this.publish(topic, fanStatusDiscovery);
 
-            const lightSensitivityDiscovery = this.hAAutoDiscoveryService.getLightSensitivitySensorMessage(device);
-            topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SELECT_DISCOVERY_TOPIC,
-                device.serialNumber, 'lightsensitivity');
-            this.publish(topic, lightSensitivityDiscovery);
+                const fanModeDiscovery = this.hAAutoDiscoveryService.getFanModeSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'fanmode');
+                this.publish(topic, fanModeDiscovery);
 
+                const filterResetButtonDiscovery = this.hAAutoDiscoveryService.getFilterResetButtonMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_BUTTON_DISCOVERY_TOPIC,
+                    device.serialNumber, 'filterreset');
+                this.publish(topic, filterResetButtonDiscovery);
 
+                const lightSensitivityDiscovery = this.hAAutoDiscoveryService.getLightSensitivitySensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SELECT_DISCOVERY_TOPIC,
+                    device.serialNumber, 'lightsensitivity');
+                this.publish(topic, lightSensitivityDiscovery);
+            });
         }
     }
 
@@ -349,9 +351,8 @@ export class MqttService {
         if (this.mqttClient.connected) {
             if (!this.deviceTopicSubscriptions.has(serialNumber)) {
                 const subscriptionTopics = this.getSubscriptionTopics(serialNumber);
-                subscriptionTopics.forEach(topic => {
-                    this.subscribeToTopic(topic);
-                })
+                // Batch subscribe to all topics at once instead of one by one
+                this.batchSubscribeToTopics(subscriptionTopics);
                 this.deviceTopicSubscriptions.add(serialNumber);
             }
         }
@@ -391,6 +392,29 @@ export class MqttService {
         });
     }
 
+    private batchSubscribeToTopics(topics: string[]): void {
+        // Filter out empty topics
+        const validTopics = topics.filter(topic => topic && topic.trim() !== '');
+        
+        if (validTopics.length === 0) return;
+
+        // Use MQTT batch subscription for better performance
+        const topicMap: { [topic: string]: { qos: number } } = {};
+        validTopics.forEach(topic => {
+            topicMap[topic] = { qos: 0 };
+        });
+
+        this.mqttClient.subscribe(topicMap, (err) => {
+            if (err) {
+                this.log.error(`mqtt batch subscription error: `, err);
+                // Fallback to individual subscriptions if batch fails
+                validTopics.forEach(topic => this.subscribeToTopic(topic));
+            } else {
+                this.log.debug(`mqtt batch subscription to ${validTopics.length} topics`);
+            }
+        });
+    }
+
     private unsubscribeFromTopic(topic: string): void {
         this.mqttClient.unsubscribe(topic, (err) => {
             if (err) {
@@ -422,11 +446,14 @@ export class MqttService {
             this.log.debug('Home Assistant went online, send discovery messages')
             this.deviceStorageService.getDevices((devices: DeviceDto[]) => {
                 if (devices) {
+                    // Process devices in parallel using setImmediate to avoid blocking
                     devices.forEach((deviceDto: DeviceDto) => {
-                        const device = this.deviceMapper.deviceFromDto(deviceDto);
-                        if (this.deviceTopicSubscriptions.has(device.serialNumber)) {
-                            this.sendDeviceDiscoveryMessages(device);
-                        }
+                        setImmediate(() => {
+                            const device = this.deviceMapper.deviceFromDto(deviceDto);
+                            if (this.deviceTopicSubscriptions.has(device.serialNumber)) {
+                                this.sendDeviceDiscoveryMessages(device);
+                            }
+                        });
                     });
                 }
             });
