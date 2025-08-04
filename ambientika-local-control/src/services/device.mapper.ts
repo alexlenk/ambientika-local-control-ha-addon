@@ -32,7 +32,7 @@ export class DeviceMapper {
         if (fanSpeed === undefined) {
             this.log.warn(`Unknown fanSpeed value ${fanSpeedValue} from buffer, defaulting to MEDIUM`);
         }
-        const finalFanSpeed = fanSpeed || FanSpeed.MEDIUM;
+        const finalFanSpeed = fanSpeed || FanSpeed[FanSpeed.MEDIUM];
         const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(10, 11)];
         const temperature = this.getIntFromBufferSlice(11, 12);
         const humidity = this.getIntFromBufferSlice(12, 13);

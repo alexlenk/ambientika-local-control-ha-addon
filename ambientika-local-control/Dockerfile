@@ -1,18 +1,22 @@
 ARG BUILD_ARCH=amd64
 
-#Build stage
-FROM node:22-alpine AS build
-
+# Development cache stage - comment this out for final build
+FROM node:22-alpine AS dev-cache
 WORKDIR /app
-
-# Install build dependencies for native modules like sqlite3
 RUN apk add --no-cache python3 py3-setuptools make g++
-
 COPY package*.json ./
-COPY tsconfig.json ./
-
 RUN npm install
+# This stage can be reused for faster builds during development
 
+#Build stage
+FROM dev-cache AS build
+# FROM node:22-alpine AS build  # Uncomment this and comment above line for final build
+# WORKDIR /app
+# RUN apk add --no-cache python3 py3-setuptools make g++
+# COPY package*.json ./
+# RUN npm install
+
+COPY tsconfig.json ./
 COPY src/ ./src/
 
 RUN npm run build
