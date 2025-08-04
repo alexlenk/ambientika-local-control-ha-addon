@@ -30,7 +30,7 @@ export class DeviceMapper {
         const fanSpeedValue = this.getIntFromBufferSlice(9, 10);
         const fanSpeed = FanSpeed[fanSpeedValue];
         if (fanSpeed === undefined) {
-            this.log.warn(`Unknown fanSpeed value ${fanSpeedValue} from buffer, defaulting to MEDIUM`);
+            this.log.warn(`Invalid fanSpeed value ${fanSpeedValue} from device buffer, using MEDIUM fallback`);
         }
         const finalFanSpeed = fanSpeed || FanSpeed[FanSpeed.MEDIUM];
         const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(10, 11)];
