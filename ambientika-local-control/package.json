@@ -1,6 +1,6 @@
 {
   "name": "ambientika-local-control-ha-addon",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Home Assistant add-on based on ambientika-local-control by sragas",
   "main": "index.js",
   "scripts": {
