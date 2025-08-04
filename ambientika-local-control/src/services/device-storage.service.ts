@@ -17,8 +17,7 @@ export class DeviceStorageService {
 
     private db: Database;
     private deviceMapper: DeviceMapper;
-    private commandSentTimestamps: Map<string, number> = new Map();
-    private readonly COMMAND_DEBOUNCE_MS = 15000; // 15 seconds debounce for testing
+    private lastSentCommands: Map<string, OperatingModeDto> = new Map();
 
     constructor(private log: Logger, private eventService: EventService) {
         this.deviceMapper = new DeviceMapper(this.log);
@@ -72,21 +71,26 @@ export class DeviceStorageService {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.debug(`Storage service local data update received: `, device);
             
-            // Check if a command was recently sent to this device
-            const lastCommandTime = this.commandSentTimestamps.get(device.serialNumber);
-            const now = Date.now();
-            
-            if (lastCommandTime && (now - lastCommandTime) < this.COMMAND_DEBOUNCE_MS) {
-                this.log.debug(`Ignoring device status update for ${device.serialNumber} - command was sent ${now - lastCommandTime}ms ago`);
-                return;
+            // Check if we have a pending command for this device
+            const lastCommand = this.lastSentCommands.get(device.serialNumber);
+            if (lastCommand && lastCommand.operatingMode) {
+                // Override the device's reported operating mode with our command
+                if (device.operatingMode !== lastCommand.operatingMode) {
+                    this.log.debug(`Overriding device ${device.serialNumber} operating mode from ${device.operatingMode} to ${lastCommand.operatingMode} (pending command)`);
+                    device.operatingMode = lastCommand.operatingMode;
+                } else {
+                    // Device has applied our command, remove it from pending
+                    this.log.debug(`Device ${device.serialNumber} has applied command ${lastCommand.operatingMode}, removing from pending`);
+                    this.lastSentCommands.delete(device.serialNumber);
+                }
             }
             
             this.saveDevice(device);
         });
 
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
-            this.log.debug(`Command sent to device ${serialNumber}, marking timestamp for debounce`);
-            this.commandSentTimestamps.set(serialNumber, Date.now());
+            this.log.debug(`Command sent to device ${serialNumber}, storing for persistence: %o`, opMode);
+            this.lastSentCommands.set(serialNumber, opMode);
         });
     }
 
