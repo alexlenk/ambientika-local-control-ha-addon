@@ -195,8 +195,12 @@ export class MqttService {
     }
 
     private sendDeviceOperatingMode(device: Device) {
+        // Check if we have a stored command that should override the device's reported mode
+        const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
+        const modeToPublish = storedMode || device.operatingMode;
+        
         this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
-            device.operatingMode)
+            modeToPublish)
     }
 
     private sendDeviceFanSpeed(device: Device) {
