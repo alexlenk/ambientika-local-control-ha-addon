@@ -18,7 +18,7 @@ export class DeviceStorageService {
     private db: Database;
     private deviceMapper: DeviceMapper;
     private commandSentTimestamps: Map<string, number> = new Map();
-    private readonly COMMAND_DEBOUNCE_MS = 2000; // 2 seconds debounce
+    private readonly COMMAND_DEBOUNCE_MS = 15000; // 15 seconds debounce for testing
 
     constructor(private log: Logger, private eventService: EventService) {
         this.deviceMapper = new DeviceMapper(this.log);
