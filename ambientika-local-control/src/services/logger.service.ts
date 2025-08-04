@@ -4,8 +4,11 @@ export class LoggerService {
     private readonly logger: Logger;
 
     constructor() {
+        // Get log level from environment variable, default to 'info'
+        const logLevel = process.env.LOG_LEVEL || 'info';
+        
         this.logger = winston.createLogger({
-            level: "silly",
+            level: logLevel,
             format: winston.format.combine(
                 winston.format.colorize(),
                 winston.format.splat(),
@@ -16,7 +19,7 @@ export class LoggerService {
             ),
             transports: [new winston.transports.Console()],
         });
-        this.logger.info('Init LoggerService');
+        this.logger.info(`Init LoggerService with level: ${logLevel}`);
     }
 
     getLogger(): Logger {

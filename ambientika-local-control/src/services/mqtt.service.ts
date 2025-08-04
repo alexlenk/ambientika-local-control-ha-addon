@@ -50,10 +50,10 @@ export class MqttService {
         this.mqttClient = connect(this.mqttConnectionString, options);
         this.mqttClient.on('connect', () => {
             this.subscribeToTopic(process.env.HOME_ASSISTANT_STATUS_TOPIC || 'homeassistant/status');
-            this.log.debug(`MqttService connected`);
+            this.log.info(`MQTT broker connected`);
         });
         this.mqttClient.on('reconnect', () => {
-            this.log.debug(`MqttService reconnecting`);
+            this.log.info(`MQTT broker reconnecting`);
             this.deviceTopicSubscriptions.clear();
         });
         this.mqttClient.on('error', (error) => {
@@ -126,7 +126,7 @@ export class MqttService {
     private sendDeviceDiscoveryMessages(device: Device): void {
         const enabled = process.env.HOME_ASSISTANT_AUTO_DISCOVERY === 'true';
         if (enabled) {
-            this.log.debug('Home Assistant MQTT auto discovery enabled, sending discovery messages')
+            this.log.debug(`Sending HA discovery messages for device ${device.serialNumber}`)
             
             // Send discovery messages asynchronously to avoid blocking
             setImmediate(() => {
@@ -320,10 +320,10 @@ export class MqttService {
 
     private publish(topic: string, message: string): void {
         if (this.mqttClient.connected) {
-            this.log.debug(`mqtt publish %o to %o`, message, topic);
+            this.log.silly(`mqtt publish ${message} to ${topic}`);
             this.mqttClient.publish(topic, message, (err) => {
                 if (err) {
-                    this.log.log(`mqtt publish error occur on publish to ${topic} with message ${message}: `, err);
+                    this.log.error(`mqtt publish error to ${topic}: `, err);
                 }
             });
         }
@@ -387,7 +387,7 @@ export class MqttService {
             if (err) {
                 this.log.error(`mqtt subscription error to ${topic}: `, err);
             } else {
-                this.log.debug(`mqtt subscription to ${topic}`);
+                this.log.silly(`mqtt subscription to ${topic}`);
             }
         });
     }
@@ -405,7 +405,7 @@ export class MqttService {
                 // Fallback to individual subscriptions if batch fails
                 validTopics.forEach(topic => this.subscribeToTopic(topic));
             } else {
-                this.log.debug(`mqtt batch subscription to ${validTopics.length} topics`);
+                this.log.info(`MQTT subscribed to ${validTopics.length} device topics`);
             }
         });
     }
@@ -421,7 +421,7 @@ export class MqttService {
     }
 
     private handleMessages(topic: string, message: Buffer): void {
-        this.log.debug(`mqtt received ${message.toString()} from topic ${topic}`);
+        this.log.info(`MQTT command: ${message.toString()} → ${topic.split('/').pop()}`);
         switch (topic) {
             case process.env.HOME_ASSISTANT_STATUS_TOPIC:
                 this.handleHAStatusMessage(message);
@@ -438,7 +438,7 @@ export class MqttService {
 
     private handleHAStatusMessage(message: Buffer): void {
         if (message.toString() === 'online') {
-            this.log.debug('Home Assistant went online, send discovery messages')
+            this.log.info('Home Assistant online - sending device discovery messages')
             this.deviceStorageService.getDevices((devices: DeviceDto[]) => {
                 if (devices) {
                     // Process devices in parallel using setImmediate to avoid blocking
