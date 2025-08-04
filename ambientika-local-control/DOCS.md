@@ -9,33 +9,74 @@ This add-on provides local control for Ambientika devices, allowing you to manag
 1. Add this repository to your Home Assistant add-on store
 2. Install the "Ambientika Local Control" add-on
 3. Configure the add-on (see Configuration section)
-4. Provision your devices (see Device Provisioning section)
+4. Set up device redirection (see Device Configuration section)
 5. Start the add-on
 
-## Device Provisioning
+## Device Configuration
 
-**Important:** Before using this add-on, you must reconfigure your Ambientika devices to connect to your local Home Assistant instead of the cloud.
+**Important:** Before using this add-on, you must redirect your Ambientika devices to connect to your local Home Assistant instead of the cloud.
 
-### Using a BLE Mobile App
+This add-on supports two methods to redirect device traffic locally. Choose the method that works best for your setup:
 
-1. Download a BLE app:
-   - **iOS:** "LightBlue Explorer" 
-   - **Android:** "nRF Connect for Mobile"
+## Method 1: Router Static Route (Recommended - More Robust)
 
-2. Put your device in pairing mode and scan for BLE devices
+This method redirects all Ambientika cloud traffic to your Home Assistant via your router.
 
-3. Connect to your device (appears as `VMC_ABCDEFABCDEF`)
+### Router Configuration
+Add a static route in your router:
+- **Destination:** `185.214.203.87/32`
+- **Gateway:** `[YOUR_HA_IP]` (replace with your Home Assistant IP address)
 
-4. Navigate to the WiFi service:
+### Home Assistant IP Alias
+Add to your `configuration.yaml`:
+```yaml
+shell_command:
+  add_ip_alias: 'ip addr add 185.214.203.87/32 dev end0 || true'
+```
+
+Add this automation:
+```yaml
+automation:
+  - alias: "Add IP Alias for Local Control"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: '00:00:30'
+      - service: shell_command.add_ip_alias
+    mode: single
+```
+
+Restart Home Assistant after adding this configuration.
+
+## Method 2: BLE Device Provisioning
+
+This method reconfigures devices to connect directly to your Home Assistant IP address.
+
+### Prerequisites
+Download a BLE app:
+- **iOS:** "LightBlue Explorer" 
+- **Android:** "nRF Connect for Mobile"
+
+### Provisioning Steps
+1. Put your device in pairing mode and scan for BLE devices
+2. Connect to your device (appears as `VMC_ABCDEFABCDEF`)
+3. Navigate to the WiFi service:
    - Service UUID: `0000a002-*`
    - Characteristic UUID: `0000c302-*`
-
-5. Write these three values to the characteristic:
+4. Write these three values to the characteristic:
    - `H_<YOUR_HA_IP>:11000` (replace with your Home Assistant IP address)
    - `S_<YOUR_WIFI_SSID>` (your WiFi network name)
    - `P_<YOUR_WIFI_PASSWORD>` (your WiFi password)
+5. The device will restart and connect to your local setup
 
-6. The device will restart and connect to your local setup
+**Note:** BLE provisioning may lose configuration over time and require re-provisioning. Static route method is more reliable for long-term use.
+
+## Important Warnings
+
+**⚠️ Compatibility:** The official Ambientika app and Home Assistant Integration will not work when either method is active, as they require direct cloud connectivity.
+
+**⚠️ Network Impact:** Router static routes affect all devices on your network trying to reach the Ambientika cloud service.
 
 ## Configuration
 
