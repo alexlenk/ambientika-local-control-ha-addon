@@ -94,6 +94,15 @@ export class DeviceStorageService {
         });
     }
 
+    hasStoredCommand(serialNumber: string): boolean {
+        return this.lastSentCommands.has(serialNumber);
+    }
+
+    getStoredOperatingMode(serialNumber: string): string | undefined {
+        const command = this.lastSentCommands.get(serialNumber);
+        return command?.operatingMode;
+    }
+
     saveDevice(device: Device) {
         this.findExistingDeviceBySerialNumber(device.serialNumber, (existingDevice: DeviceDto | undefined) => {
             if (!existingDevice) {
