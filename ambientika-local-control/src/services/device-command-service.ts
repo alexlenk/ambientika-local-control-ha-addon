@@ -74,10 +74,18 @@ export class DeviceCommandService {
             buffer.writeInt8(operatingMode, offset);
             offset++;
 
-            const fanSpeed = opMode.fanSpeed !== undefined ?
+            const fanSpeedValue = opMode.fanSpeed !== undefined ?
                 FanSpeed[opMode.fanSpeed as keyof typeof FanSpeed] :
                 FanSpeed[device.fanSpeed as keyof typeof FanSpeed];
-            buffer.writeInt8(fanSpeed.valueOf(), offset);
+            
+            // Handle unknown fan speeds by defaulting to MEDIUM
+            const finalFanSpeed = fanSpeedValue !== undefined ? fanSpeedValue : FanSpeed.MEDIUM;
+            
+            if (fanSpeedValue === undefined) {
+                this.log.warn(`Unknown fanSpeed value ${opMode.fanSpeed || device.fanSpeed}, defaulting to MEDIUM`);
+            }
+            
+            buffer.writeInt8(finalFanSpeed.valueOf(), offset);
             offset++;
 
             const humidityLevel = opMode.humidityLevel !== undefined ?
