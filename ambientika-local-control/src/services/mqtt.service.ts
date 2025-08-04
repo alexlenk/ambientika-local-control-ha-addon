@@ -185,12 +185,18 @@ export class MqttService {
     }
 
     private sendDeviceMode(device: Device) {
-        const mode = device.operatingMode === OperatingMode[OperatingMode.OFF] ? 'off' : 'fan_only';
+        // Check if we have a stored command that should override the device's reported mode
+        const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
+        const effectiveOperatingMode = storedMode || device.operatingMode;
+        const mode = effectiveOperatingMode === OperatingMode[OperatingMode.OFF] ? 'off' : 'fan_only';
         this.publish(this.getDevicePublishTopic(process.env.MODE_STATE_TOPIC, device.serialNumber), mode);
     }
 
     private sendDeviceAction(device: Device) {
-        const action = device.operatingMode === OperatingMode[OperatingMode.OFF] ? 'off' : 'fan';
+        // Check if we have a stored command that should override the device's reported mode
+        const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
+        const effectiveOperatingMode = storedMode || device.operatingMode;
+        const action = effectiveOperatingMode === OperatingMode[OperatingMode.OFF] ? 'off' : 'fan';
         this.publish(this.getDevicePublishTopic(process.env.ACTION_STATE_TOPIC, device.serialNumber), action);
     }
 
