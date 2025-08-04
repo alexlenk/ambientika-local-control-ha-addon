@@ -1,5 +1,8 @@
 # Ambientika Local Control Add-on Documentation
 
+![Supports aarch64 Architecture][aarch64-shield]
+![Supports amd64 Architecture][amd64-shield]
+
 ## About
 
 This add-on provides local control for Ambientika devices, allowing you to manage your ventilation system without relying on the cloud service.
@@ -137,3 +140,6 @@ Once configured and started:
 ## Support
 
 For issues and questions, visit the [GitHub repository](https://github.com/sragas/ambientika-local-control).
+
+[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
+[amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
