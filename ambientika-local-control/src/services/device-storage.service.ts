@@ -9,6 +9,7 @@ import {AppEvents} from '../models/enum/app-events.enum';
 import {Instant} from '@js-joda/core';
 import {DeviceDto} from '../dto/device.dto';
 import {DeviceMapper} from './device.mapper';
+import {OperatingModeDto} from '../dto/operating-mode.dto';
 
 dotenv.config()
 
@@ -16,6 +17,8 @@ export class DeviceStorageService {
 
     private db: Database;
     private deviceMapper: DeviceMapper;
+    private commandSentTimestamps: Map<string, number> = new Map();
+    private readonly COMMAND_DEBOUNCE_MS = 2000; // 2 seconds debounce
 
     constructor(private log: Logger, private eventService: EventService) {
         this.deviceMapper = new DeviceMapper(this.log);
@@ -68,7 +71,22 @@ export class DeviceStorageService {
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.debug(`Storage service local data update received: `, device);
+            
+            // Check if a command was recently sent to this device
+            const lastCommandTime = this.commandSentTimestamps.get(device.serialNumber);
+            const now = Date.now();
+            
+            if (lastCommandTime && (now - lastCommandTime) < this.COMMAND_DEBOUNCE_MS) {
+                this.log.debug(`Ignoring device status update for ${device.serialNumber} - command was sent ${now - lastCommandTime}ms ago`);
+                return;
+            }
+            
             this.saveDevice(device);
+        });
+
+        this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
+            this.log.debug(`Command sent to device ${serialNumber}, marking timestamp for debounce`);
+            this.commandSentTimestamps.set(serialNumber, Date.now());
         });
     }
 
