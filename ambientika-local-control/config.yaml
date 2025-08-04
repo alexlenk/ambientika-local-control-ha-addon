@@ -1,12 +1,11 @@
 name: Ambientika Local Control
-version: "1.0.7"
+version: "1.0.8"
 slug: ambientika_local_control
 description: Local control for Ambientika devices with MQTT integration (based on ambientika-local-control by sragas)
 url: https://github.com/alexlenk/ambientika-local-control-ha-addon
 image: "ghcr.io/alexlenk/ambientika-local-control-ha-addon-{arch}"
 arch:
   - aarch64
-  - amd64
 init: false
 host_network: true
 privileged:

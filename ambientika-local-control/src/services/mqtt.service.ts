@@ -398,13 +398,8 @@ export class MqttService {
         
         if (validTopics.length === 0) return;
 
-        // Use MQTT batch subscription for better performance
-        const topicMap: { [topic: string]: { qos: number } } = {};
-        validTopics.forEach(topic => {
-            topicMap[topic] = { qos: 0 };
-        });
-
-        this.mqttClient.subscribe(topicMap, (err) => {
+        // Use MQTT batch subscription for better performance - subscribe to array of topics
+        this.mqttClient.subscribe(validTopics, (err) => {
             if (err) {
                 this.log.error(`mqtt batch subscription error: `, err);
                 // Fallback to individual subscriptions if batch fails
