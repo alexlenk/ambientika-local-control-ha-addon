@@ -31,7 +31,7 @@ export class DeviceCommandService {
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto
             , serialNumber: string) => {
-            this.log.debug(`Command service operating Mode update received for: ${serialNumber} with data %o`, opMode);
+            this.log.info(`Sending command to ${serialNumber}: ${JSON.stringify(opMode)}`);
             this.handleOperatingModeUpdate(opMode, serialNumber)
         });
         this.eventService.on(AppEvents.DEVICE_FILTER_RESET, (serialNumber: string) => {

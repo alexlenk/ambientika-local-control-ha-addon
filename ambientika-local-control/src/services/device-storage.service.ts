@@ -69,7 +69,7 @@ export class DeviceStorageService {
 
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
-            this.log.debug(`Storage service local data update received: `, device);
+            this.log.silly(`Storage service local data update received: `, device);
             
             // Check if we have a pending command for this device
             const lastCommand = this.lastSentCommands.get(device.serialNumber);
@@ -92,7 +92,7 @@ export class DeviceStorageService {
                 
                 // Remove command if device has applied it
                 if (commandApplied) {
-                    this.log.debug(`Device ${device.serialNumber} has applied command, removing from pending`);
+                    this.log.info(`Device ${device.serialNumber} applied command successfully`);
                     this.lastSentCommands.delete(device.serialNumber);
                 }
             }
@@ -101,7 +101,7 @@ export class DeviceStorageService {
         });
 
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
-            this.log.debug(`Command sent to device ${serialNumber}, storing for persistence: %o`, opMode);
+            this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(opMode)}`);
             this.lastSentCommands.set(serialNumber, opMode);
             
             // Immediately trigger MQTT update with the commanded values
@@ -219,7 +219,7 @@ export class DeviceStorageService {
                 if (error) {
                     this.log.error('Error created device on db', error);
                 } else {
-                    this.log.debug('Successfully updated device on db', error);
+                    this.log.silly('Successfully updated device on db', error);
                 }
             });
     }

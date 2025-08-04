@@ -35,13 +35,13 @@ export class LocalSocketService {
     private initConnectionListener(serverSocket: Socket): void {
         if (serverSocket.remoteAddress) {
             this.clients.set(serverSocket.remoteAddress, serverSocket)
-            this.log.debug(`local connection from ${serverSocket.remoteAddress}:${serverSocket.remotePort}`);
+            this.log.info(`Device connected: ${serverSocket.remoteAddress}:${serverSocket.remotePort}`);
             this.eventService.localSocketConnected(serverSocket.remoteAddress);
         }
 
         serverSocket.on('close', () => {
             if (serverSocket.remoteAddress) {
-                this.log.debug(`local connection from ${serverSocket.remoteAddress} closed`);
+                this.log.info(`Device disconnected: ${serverSocket.remoteAddress}`);
                 this.eventService.localSocketDisconnected(serverSocket.remoteAddress);
                 this.clients.delete(serverSocket.remoteAddress);
             }
@@ -59,7 +59,7 @@ export class LocalSocketService {
             if (data.length === 21) {
                 const remoteAddress = serverSocket.remoteAddress || '';
                 const device = this.deviceMapper.deviceFromSocketBuffer(data, remoteAddress);
-                this.log.debug('Created device from data %o', device);
+                this.log.info(`Device status: ${device.serialNumber} → ${device.operatingMode} (${device.fanSpeed})`);
                 this.eventService.deviceStatusUpdate(device);
             }
         });
