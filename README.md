@@ -26,17 +26,20 @@ Original project provides local control for Ambientika ventilation devices. This
 4. Set up network configuration (see below)
 5. Start the add-on
 
-## Network Configuration
+## Device Configuration
 
-This add-on intercepts cloud traffic by redirecting it locally. Two configurations are required:
+This add-on supports two methods to redirect device traffic locally. Choose the method that works best for your setup:
 
-### 1. Router Static Route
+## Method 1: Router Static Route (Recommended - More Robust)
+
+This method redirects all Ambientika cloud traffic to your Home Assistant via your router.
+
+### Router Configuration
 Add a static route in your router:
 - **Destination:** `185.214.203.87/32`
-- **Gateway:** `192.168.178.30` (your HA IP)
+- **Gateway:** `192.168.178.30` (replace with your HA IP)
 
-### 2. Home Assistant IP Alias
-
+### Home Assistant IP Alias
 Add to your `configuration.yaml`:
 ```yaml
 shell_command:
@@ -58,7 +61,34 @@ automation:
 
 Restart Home Assistant after adding this configuration.
 
-**⚠️ Warning:** The official Ambientika app and Home Assistant Integration will not work when the static route or IP alias is active, as they require direct cloud connectivity.
+## Method 2: BLE Device Provisioning
+
+This method reconfigures devices to connect directly to your Home Assistant IP address.
+
+### Prerequisites
+Download a BLE app:
+- **iOS:** "LightBlue Explorer" 
+- **Android:** "nRF Connect for Mobile"
+
+### Provisioning Steps
+1. Put your device in pairing mode and scan for BLE devices
+2. Connect to your device (appears as `VMC_ABCDEFABCDEF`)
+3. Navigate to the WiFi service:
+   - Service UUID: `0000a002-*`
+   - Characteristic UUID: `0000c302-*`
+4. Write these three values to the characteristic:
+   - `H_<YOUR_HA_IP>:11000` (replace with your Home Assistant IP address)
+   - `S_<YOUR_WIFI_SSID>` (your WiFi network name)
+   - `P_<YOUR_WIFI_PASSWORD>` (your WiFi password)
+5. The device will restart and connect to your local setup
+
+**Note:** BLE provisioning may lose configuration over time and require re-provisioning. Static route method is more reliable for long-term use.
+
+## Important Warnings
+
+**⚠️ Compatibility:** The official Ambientika app and Home Assistant Integration will not work when either method is active, as they require direct cloud connectivity.
+
+**⚠️ Network Impact:** Router static routes affect all devices on your network trying to reach the Ambientika cloud service.
 
 ## Configuration
 
