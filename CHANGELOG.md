@@ -71,6 +71,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Log level configuration not being passed from Home Assistant add-on settings
 - Various logging improvements for better debugging visibility
 
+## [1.0.20] - 2025-08-05
+
+### Added
+- **New Sensor**: Dedicated preset mode sensor for Home Assistant
+  - Creates separate `sensor.<device_serial>_preset_mode` entity for each device
+  - Shows current operating mode (SMART, INTAKE, AUTO, AWAY_HOME, etc.)
+  - Uses `mdi:tune-variant` icon for clear visual identification
+  - Automatically discovered when devices connect
+
+### Changed
+- Enhanced Home Assistant integration with additional sensor entities
+- Improved device visibility for dashboards and automations
+
 ## [Unreleased]
 
 ### Planned
