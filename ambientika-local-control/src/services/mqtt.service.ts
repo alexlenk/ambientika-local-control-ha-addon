@@ -80,6 +80,7 @@ export class MqttService {
         });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
+                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}`);
                 this.sendFanStatus(deviceBroadcastStatus);
                 this.sendFanMode(deviceBroadcastStatus);
             });
@@ -320,7 +321,7 @@ export class MqttService {
 
     private publish(topic: string, message: string): void {
         if (this.mqttClient.connected) {
-            this.log.silly(`mqtt publish ${message} to ${topic}`);
+            this.log.trace(`mqtt publish ${message} to ${topic}`);
             this.mqttClient.publish(topic, message, (err) => {
                 if (err) {
                     this.log.error(`mqtt publish error to ${topic}: `, err);
@@ -387,7 +388,7 @@ export class MqttService {
             if (err) {
                 this.log.error(`mqtt subscription error to ${topic}: `, err);
             } else {
-                this.log.silly(`mqtt subscription to ${topic}`);
+                this.log.trace(`mqtt subscription to ${topic}`);
             }
         });
     }
