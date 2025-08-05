@@ -42,7 +42,7 @@ export class UDPBroadcastService {
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
             const serialNumber = this.localAddressesSerialNumbers.get(remoteInfo.address);
             const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber);
-            this.log.debug('Created device status broadcast from data %o', deviceStatus);
+            this.log.silly('Created device status broadcast from data %o', deviceStatus);
             if (deviceStatus.serialNumber) {
                 this.eventService.deviceBroadcastStatus(deviceStatus);
             }
