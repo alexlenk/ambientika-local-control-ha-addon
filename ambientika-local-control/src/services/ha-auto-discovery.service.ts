@@ -129,6 +129,13 @@ export class HAAutoDiscoveryService {
             process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC, device, options, attributes);
     }
 
+    getPresetModeSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:tune-variant'
+        };
+        return this.getSensorDiscoveryMessage('preset_mode', process.env.PRESET_MODE_STATE_TOPIC, device, attributes);
+    }
+
     private getBinarySensorDiscoveryMessage(type: string, topic: string | undefined, device: Device,
                                             attributes?: HaAutoDiscoverDeviceAttributes): string {
         const binarySensorDiscovery = {

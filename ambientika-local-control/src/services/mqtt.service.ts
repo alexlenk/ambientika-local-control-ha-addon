@@ -187,6 +187,11 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SELECT_DISCOVERY_TOPIC,
                     device.serialNumber, 'lightsensitivity');
                 this.publish(topic, lightSensitivityDiscovery);
+
+                const presetModeDiscovery = this.hAAutoDiscoveryService.getPresetModeSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'presetmode');
+                this.publish(topic, presetModeDiscovery);
             });
         }
     }
