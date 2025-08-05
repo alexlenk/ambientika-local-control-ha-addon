@@ -106,23 +106,8 @@ export class DeviceStorageService {
             this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(opMode)}`);
             this.lastSentCommands.set(serialNumber, opMode);
             
-            // Immediately trigger MQTT update with the commanded values
-            this.findExistingDeviceBySerialNumber(serialNumber, (dto: DeviceDto | undefined) => {
-                if (dto) {
-                    const device = this.deviceMapper.deviceFromDto(dto);
-                    
-                    // Override with commanded values
-                    if (opMode.operatingMode) {
-                        device.operatingMode = opMode.operatingMode;
-                    }
-                    if (opMode.fanSpeed) {
-                        device.fanSpeed = opMode.fanSpeed.toUpperCase();
-                    }
-                    
-                    // Trigger immediate MQTT update
-                    this.eventService.deviceStatusUpdate(device);
-                }
-            });
+            // Commands will be applied via override logic when real device status updates arrive
+            // No need to trigger fake device status updates here
         });
     }
 
