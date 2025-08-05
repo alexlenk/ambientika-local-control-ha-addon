@@ -46,7 +46,7 @@ export class RemoteSocketService {
             this.clients.delete(localAddress);
         });
         remoteSocket.on('data', (data: Buffer) => {
-            this.log.trace(`Received data on remote socket for ${localAddress} %o`, data);
+            this.log.silly(`Received data on remote socket for ${localAddress} %o`, data);
             this.eventService.remoteSocketDataUpdateReceived(data, localAddress);
             if (data.length === 9) {
                 const deviceFilterReset = this.deviceMapper.deviceFilterResetFromSocketBuffer(data);
@@ -73,7 +73,7 @@ export class RemoteSocketService {
 
     private initEventListener(): void {
         this.eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, (data: Buffer, localAddress: string) => {
-            this.log.trace(`Update cloud data from ${localAddress}: %o`, data);
+            this.log.silly(`Update cloud data from ${localAddress}: %o`, data);
             this.write(data, localAddress);
         });
 

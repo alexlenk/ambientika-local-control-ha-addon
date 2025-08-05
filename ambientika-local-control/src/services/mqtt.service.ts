@@ -321,7 +321,7 @@ export class MqttService {
 
     private publish(topic: string, message: string): void {
         if (this.mqttClient.connected) {
-            this.log.trace(`mqtt publish ${message} to ${topic}`);
+            this.log.silly(`mqtt publish ${message} to ${topic}`);
             this.mqttClient.publish(topic, message, (err) => {
                 if (err) {
                     this.log.error(`mqtt publish error to ${topic}: `, err);
@@ -388,7 +388,7 @@ export class MqttService {
             if (err) {
                 this.log.error(`mqtt subscription error to ${topic}: `, err);
             } else {
-                this.log.trace(`mqtt subscription to ${topic}`);
+                this.log.silly(`mqtt subscription to ${topic}`);
             }
         });
     }
