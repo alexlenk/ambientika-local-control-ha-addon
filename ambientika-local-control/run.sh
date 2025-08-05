@@ -115,6 +115,7 @@ NIGHT_ALARM_TOPIC=ambientika/%serialNumber/night_alarm
 LIGHT_SENSITIVITY_TOPIC=ambientika/%serialNumber/light_sensitivity
 LIGHT_SENSITIVITY_COMMAND_TOPIC=ambientika/%serialNumber/light_sensitivity/set
 WEATHER_UPDATE_TOPIC=ambientika/weather
+DEVICE_SETUP_COMMAND_TOPIC=ambientika/%serialNumber/device_setup/set
 EOF
 
 # Log configuration

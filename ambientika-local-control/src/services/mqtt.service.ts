@@ -13,6 +13,7 @@ import {DeviceStorageService} from './device-storage.service';
 import {DeviceDto} from '../dto/device.dto';
 import {DeviceMapper} from './device.mapper';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
+import {DeviceSetupDto} from '../dto/device-setup.dto';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
 
 dotenv.config()
@@ -384,6 +385,7 @@ export class MqttService {
         topics.push((process.env.PRESET_MODE_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.FILTER_RESET_TOPIC || '').replace('%serialNumber', serialNumber));
+        topics.push((process.env.DEVICE_SETUP_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
@@ -474,6 +476,17 @@ export class MqttService {
         }
     }
 
+    private handleDeviceSetup(serialNumber: string, message: Buffer): void {
+        try {
+            const deviceSetupDto = JSON.parse(message.toString()) as DeviceSetupDto;
+            deviceSetupDto.serialNumber = serialNumber; // Ensure serial number matches topic
+            this.log.info(`Device setup received for ${serialNumber}: ${JSON.stringify(deviceSetupDto)}`);
+            this.eventService.deviceSetupUpdate(deviceSetupDto);
+        } catch (error) {
+            this.log.error(`Failed to parse device setup message for ${serialNumber}: ${error}`);
+        }
+    }
+
     private handleCommandStatusMessage(topic: string, message: Buffer): void {
         const serialNumber: string | undefined = this.extractSerialNumberFromTopic(topic);
         if (serialNumber) {
@@ -482,6 +495,8 @@ export class MqttService {
                 this.eventService.deviceOperatingModeUpdate(operatingModeDto, serialNumber);
             } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.FILTER_RESET_TOPIC) {
                 this.handleFilterReset(serialNumber);
+            } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.DEVICE_SETUP_COMMAND_TOPIC) {
+                this.handleDeviceSetup(serialNumber, message);
             } else {
                 this.log.warn(`Could not build command for ${serialNumber} from ${message} on ${topic}`);
             }

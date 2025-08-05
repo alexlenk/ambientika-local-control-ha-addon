@@ -11,6 +11,8 @@ import {Device} from '../models/device.model';
 import {DeviceMapper} from './device.mapper';
 import {LightSensitivity} from '../models/enum/light-sensitivity.enum';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
+import {DeviceSetupDto} from '../dto/device-setup.dto';
+import {DeviceRole} from '../models/enum/device-role.enum';
 
 export class DeviceCommandService {
 
@@ -46,6 +48,10 @@ export class DeviceCommandService {
         });
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.handleDeviceStatusUpdate(device);
+        });
+        this.eventService.on(AppEvents.DEVICE_SETUP_UPDATE, (deviceSetupDto: DeviceSetupDto) => {
+            this.log.info(`Device setup command received: ${JSON.stringify(deviceSetupDto)}`);
+            this.handleDeviceSetup(deviceSetupDto);
         });
     }
 
@@ -270,6 +276,57 @@ export class DeviceCommandService {
         offset++;
         buffer.writeInt8(weatherUpdateDto.airQuality, offset);
 
+        return buffer;
+    }
+
+    private handleDeviceSetup(deviceSetupDto: DeviceSetupDto): void {
+        this.deviceStorageService.findExistingDeviceBySerialNumber(deviceSetupDto.serialNumber,
+            (dto: DeviceDto | undefined) => {
+                if (dto) {
+                    const device = this.deviceMapper.deviceFromDto(dto);
+                    this.log.info(`Sending device setup to ${deviceSetupDto.serialNumber}: role=${deviceSetupDto.deviceRole}, zone=${deviceSetupDto.zoneIndex}, houseId=${deviceSetupDto.houseId}`);
+                    
+                    const data = this.getDeviceSetupBufferData(deviceSetupDto);
+                    this.log.info(`Generated setup buffer: ${data.toString('hex')}`);
+                    
+                    this.localSocketDataUpdate(data, device.remoteAddress);
+                } else {
+                    this.log.error(`Device ${deviceSetupDto.serialNumber} not found for setup command`);
+                }
+            });
+    }
+
+    private getDeviceSetupBufferData(deviceSetupDto: DeviceSetupDto): Buffer {
+        const buffer = Buffer.alloc(15);
+        buffer.writeInt8(0x02);
+        buffer.writeInt8(0x00, 1);
+        
+        // Write serial number (6 bytes)
+        const serialNumberChars = deviceSetupDto.serialNumber.match(/.{2}/g);
+        let offset = 2;
+        if (serialNumberChars) {
+            serialNumberChars.forEach((octet: string) => {
+                buffer.writeInt8(parseInt(octet, 16), offset);
+                offset++;
+            });
+        }
+        
+        // Command type for setup (assuming 0x04 based on pattern)
+        buffer.writeInt8(0x04, offset);
+        offset++;
+        
+        // Device role
+        const roleValue = DeviceRole[deviceSetupDto.deviceRole as keyof typeof DeviceRole];
+        buffer.writeInt8(roleValue, offset);
+        offset++;
+        
+        // Zone index
+        buffer.writeInt8(deviceSetupDto.zoneIndex, offset);
+        offset++;
+        
+        // House ID (4 bytes, little endian)
+        buffer.writeUInt32LE(deviceSetupDto.houseId, offset);
+        
         return buffer;
     }
 }

@@ -5,6 +5,7 @@ import {Logger} from 'winston';
 import {OperatingModeDto} from '../dto/operating-mode.dto';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
+import {DeviceSetupDto} from '../dto/device-setup.dto';
 
 export class EventService extends EventEmitter {
     constructor(private log: Logger) {
@@ -79,6 +80,11 @@ export class EventService extends EventEmitter {
     deviceBroadcastStatus(deviceBroadcastStatus: DeviceBroadcastStatus): void {
         this.log.debug(`Emit event ${AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED}`, deviceBroadcastStatus);
         this.emit(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED, deviceBroadcastStatus);
+    }
+
+    deviceSetupUpdate(deviceSetupDto: DeviceSetupDto): void {
+        this.log.debug(`Emit event ${AppEvents.DEVICE_SETUP_UPDATE}`, deviceSetupDto);
+        this.emit(AppEvents.DEVICE_SETUP_UPDATE, deviceSetupDto);
     }
 
 }
