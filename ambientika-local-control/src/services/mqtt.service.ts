@@ -503,9 +503,14 @@ export class MqttService {
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
             case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
-                // Map auto to medium, keep other values as-is
+                // Only accept valid fan speeds: LOW, MEDIUM, HIGH
                 const fanSpeedUpper = messageString.toUpperCase();
-                dto.fanSpeed = fanSpeedUpper === 'AUTO' ? 'MEDIUM' : fanSpeedUpper;
+                if (fanSpeedUpper === 'LOW' || fanSpeedUpper === 'MEDIUM' || fanSpeedUpper === 'HIGH') {
+                    dto.fanSpeed = fanSpeedUpper;
+                } else {
+                    this.log.warn(`Invalid fan speed '${messageString}' received, ignoring command`);
+                    return undefined;
+                }
                 return dto;
             case process.env.MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.operatingMode = messageString === 'fan_only' ? OperatingMode.LAST.toString() :
