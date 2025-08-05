@@ -15,6 +15,8 @@ import {WeatherUpdateDto} from '../dto/weather-update.dto';
 export class DeviceCommandService {
 
     private deviceMapper: DeviceMapper;
+    private pendingCommands: Map<string, { timestamp: number, command: OperatingModeDto, timeoutId: NodeJS.Timeout }> = new Map();
+    private readonly COMMAND_TIMEOUT_MS = 5000; // 5 seconds timeout for device response
 
     constructor(private log: Logger,
                 private deviceStorageService: DeviceStorageService,
@@ -42,9 +44,23 @@ export class DeviceCommandService {
             this.log.debug(`Command service weather update received`);
             this.handleWeatherUpdate(weatherUpdateDto);
         });
+        this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
+            this.handleDeviceStatusUpdate(device);
+        });
+    }
+
+    private handleDeviceStatusUpdate(device: Device): void {
+        const pending = this.pendingCommands.get(device.serialNumber);
+        if (pending) {
+            this.log.info(`✅ Device ${device.serialNumber} responded - clearing timeout`);
+            clearTimeout(pending.timeoutId);
+            this.pendingCommands.delete(device.serialNumber);
+        }
     }
 
     private handleOperatingModeUpdate(opMode: OperatingModeDto, serialNumber: string): void {
+        const now = Date.now();
+        
         this.log.info(`=== DEEP COMMAND ANALYSIS for ${serialNumber} ===`);
         this.log.info(`Command: ${JSON.stringify(opMode)}`);
         
@@ -57,6 +73,23 @@ export class DeviceCommandService {
                     const data = this.getUpdateBufferData(opMode, device);
                     this.log.info(`Generated command buffer: ${data.toString('hex')}`);
                     this.analyzeCommandBuffer(data, opMode, device);
+                    
+                    // Clear any existing timeout for this device
+                    const existingPending = this.pendingCommands.get(serialNumber);
+                    if (existingPending) {
+                        clearTimeout(existingPending.timeoutId);
+                    }
+                    
+                    // Setup timeout for device response
+                    const timeoutId = setTimeout(() => {
+                        this.log.error(`❌ Device ${serialNumber} did not respond within ${this.COMMAND_TIMEOUT_MS}ms`);
+                        this.log.error(`❌ Command that timed out: ${JSON.stringify(opMode)}`);
+                        this.log.error(`❌ Device may be unresponsive - check socket connection`);
+                        this.pendingCommands.delete(serialNumber);
+                    }, this.COMMAND_TIMEOUT_MS);
+                    
+                    this.pendingCommands.set(serialNumber, { timestamp: now, command: opMode, timeoutId });
+                    this.log.info(`⏱️  Command timeout set for ${this.COMMAND_TIMEOUT_MS}ms`);
                     
                     this.localSocketDataUpdate(data, device.remoteAddress);
                 }
