@@ -38,11 +38,11 @@ export class UDPBroadcastService {
     private initListener(zoneIndex: number, listenerPort: number): void {
         const socket = createSocket('udp4');
         socket.on('message', (data: Buffer, remoteInfo: RemoteInfo) => {
-            this.log.silly(`Received data on udp socket ${listenerPort} for 
+            this.log.trace(`Received data on udp socket ${listenerPort} for 
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
             const serialNumber = this.localAddressesSerialNumbers.get(remoteInfo.address);
             const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber);
-            this.log.silly('Created device status broadcast from data %o', deviceStatus);
+            this.log.trace('Created device status broadcast from data %o', deviceStatus);
             if (deviceStatus.serialNumber) {
                 this.eventService.deviceBroadcastStatus(deviceStatus);
             }

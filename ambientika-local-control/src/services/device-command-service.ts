@@ -52,7 +52,7 @@ export class DeviceCommandService {
             (dto: DeviceDto | undefined) => {
                 if (dto) {
                     const device = this.deviceMapper.deviceFromDto(dto);
-                    this.log.info(`Current device state: mode=${device.operatingMode}, fanSpeed=${device.fanSpeed}, role=${device.deviceRole}`);
+                    this.log.info(`Current device state: mode=${device.operatingMode}, lastMode=${device.lastOperatingMode}, fanSpeed=${device.fanSpeed}, role=${device.deviceRole}`);
                     
                     const data = this.getUpdateBufferData(opMode, device);
                     this.log.info(`Generated command buffer: ${data.toString('hex')}`);
