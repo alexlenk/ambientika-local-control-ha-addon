@@ -72,7 +72,7 @@ export class LocalSocketService {
             this.write(data, remoteAddress);
         })
         this.eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, (data: Buffer, remoteAddress: string) => {
-            this.log.silly(`Update local data for ${remoteAddress} received: %o`, data);
+            this.log.info(`Sending command to device ${remoteAddress}: ${data.toString('hex')}`);
             this.write(data, remoteAddress);
         })
     }
@@ -80,9 +80,10 @@ export class LocalSocketService {
     write(data: Buffer, remoteAddress: string) {
         const client: Socket | undefined = this.clients.get(remoteAddress);
         if (client) {
+            this.log.debug(`Writing ${data.length} bytes to device ${remoteAddress}`);
             client.write(data);
         } else {
-            this.log.warn(`Local Socket for ${remoteAddress} not found.`);
+            this.log.error(`Local Socket for ${remoteAddress} not found - command not sent!`);
         }
     }
 }

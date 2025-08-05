@@ -78,22 +78,24 @@ export class DeviceStorageService {
                 
                 // Check operating mode override
                 if (lastCommand.operatingMode && device.operatingMode !== lastCommand.operatingMode) {
-                    this.log.debug(`Overriding device ${device.serialNumber} operating mode from ${device.operatingMode} to ${lastCommand.operatingMode} (pending command)`);
+                    this.log.debug(`Device ${device.serialNumber} pending command: expected ${lastCommand.operatingMode}, got ${device.operatingMode} - overriding`);
                     device.operatingMode = lastCommand.operatingMode;
                     commandApplied = false;
                 }
                 
                 // Check fan speed override
                 if (lastCommand.fanSpeed && device.fanSpeed !== lastCommand.fanSpeed.toUpperCase()) {
-                    this.log.debug(`Overriding device ${device.serialNumber} fan speed from ${device.fanSpeed} to ${lastCommand.fanSpeed} (pending command)`);
+                    this.log.debug(`Device ${device.serialNumber} pending command: expected ${lastCommand.fanSpeed}, got ${device.fanSpeed} - overriding`);
                     device.fanSpeed = lastCommand.fanSpeed.toUpperCase();
                     commandApplied = false;
                 }
                 
-                // Remove command if device has applied it
+                // Remove command only if device actually matches what we sent
                 if (commandApplied) {
-                    this.log.info(`Device ${device.serialNumber} applied command successfully`);
+                    this.log.info(`Device ${device.serialNumber} applied command successfully: ${JSON.stringify(lastCommand)}`);
                     this.lastSentCommands.delete(device.serialNumber);
+                } else {
+                    this.log.debug(`Device ${device.serialNumber} command still pending: ${JSON.stringify(lastCommand)}`);
                 }
             }
             
