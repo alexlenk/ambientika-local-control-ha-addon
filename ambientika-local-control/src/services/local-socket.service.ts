@@ -48,7 +48,7 @@ export class LocalSocketService {
         });
 
         serverSocket.on('data', (data: Buffer) => {
-            this.log.trace('Received data on local socket %o', data);
+            this.log.silly('Received data on local socket %o', data);
             if (serverSocket.remoteAddress) {
                 this.eventService.localSocketDataUpdateReceived(data, serverSocket.remoteAddress);
             }
@@ -68,7 +68,7 @@ export class LocalSocketService {
     private initEventListener(): void {
         this.eventService.on(AppEvents.REMOTE_SOCKET_DATA_UPDATE_RECEIVED, (data: Buffer,
                                                                             remoteAddress: string) => {
-            this.log.trace(`Update local data for ${remoteAddress} received: %o from cloud`, data);
+            this.log.silly(`Update local data for ${remoteAddress} received: %o from cloud`, data);
             this.write(data, remoteAddress);
         })
         this.eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, (data: Buffer, remoteAddress: string) => {

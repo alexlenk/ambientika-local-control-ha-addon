@@ -69,7 +69,7 @@ export class DeviceStorageService {
 
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
-            this.log.trace(`Storage service local data update received: `, device);
+            this.log.silly(`Storage service local data update received: `, device);
             
             // Check if we have a pending command for this device - FOR DEBUGGING ONLY
             const lastCommand = this.lastSentCommands.get(device.serialNumber);
@@ -204,7 +204,7 @@ export class DeviceStorageService {
                 if (error) {
                     this.log.error('Error created device on db', error);
                 } else {
-                    this.log.trace('Successfully updated device on db', error);
+                    this.log.silly('Successfully updated device on db', error);
                 }
             });
     }
