@@ -15,4 +15,5 @@ export interface HaAutoDiscoverClimateInterface extends HaAutoDiscoverInterface 
     preset_mode_command_topic: string;
     preset_modes: string[];
     modes: string[];
+    fan_modes: string[];
 }

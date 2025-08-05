@@ -48,7 +48,8 @@ export class HAAutoDiscoveryService {
             preset_mode_command_topic: this.mqttService.getDevicePublishTopic(process.env.PRESET_MODE_COMMAND_TOPIC,
                 device.serialNumber),
             preset_modes: (process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES?.split(',') || []),
-            modes: ['off', 'fan_only']
+            modes: ['off', 'fan_only'],
+            fan_modes: ['low', 'medium', 'high']
         } as HaAutoDiscoverClimateInterface;
 
         return JSON.stringify(climateDeviceDiscovery);
