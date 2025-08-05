@@ -41,7 +41,7 @@ export class DeviceMapper {
         const filterStatus = FilterStatus[this.getIntFromBufferSlice(15, 16)];
         const nightAlarm = this.getBooleanFromBufferSlice(16, 17);
         const deviceRoleValue = this.getIntFromBufferSlice(17, 18);
-        const deviceRole = DeviceRole[deviceRoleValue] || DeviceRole[DeviceRole.MASTER];
+        const deviceRole = DeviceRole[deviceRoleValue];
         const lastOperatingMode = OperatingMode[this.getIntFromBufferSlice(18, 19)];
         const lightSensitivity = LightSensitivity[this.getIntFromBufferSlice(19, 20)];
         const signalStrength = this.getIntFromBufferSlice(20, 21);
