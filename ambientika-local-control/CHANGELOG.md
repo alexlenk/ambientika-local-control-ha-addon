@@ -2,10 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.0.22]
 
-## [1.0.19] - 2025-08-05
+### Fixed
+- **Changelog Format**: Removed incorrect dates from changelog entries
+- Simplified format for better readability and accuracy
+
+## [1.0.21]
+
+### Fixed
+- **Changelog Visibility**: Added CHANGELOG.md to add-on directory for Home Assistant UI
+- Ensures changelog is properly displayed in Home Assistant add-on store
+
+## [1.0.20]
+
+### Added
+- **New Sensor**: Dedicated preset mode sensor for Home Assistant
+  - Creates separate `sensor.<device_serial>_preset_mode` entity for each device
+  - Shows current operating mode (SMART, INTAKE, AUTO, AWAY_HOME, etc.)
+  - Uses `mdi:tune-variant` icon for clear visual identification
+  - Automatically discovered when devices connect
+
+### Changed
+- Enhanced Home Assistant integration with additional sensor entities
+- Improved device visibility for dashboards and automations
+
+## [1.0.19]
 
 ### Fixed
 - **CRITICAL**: Fixed socket connection routing bug causing devices to become permanently unresponsive
@@ -22,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced error handling for invalid fan speed commands
 - Better device connection logging with connection key details
 
-## [1.0.18] - 2025-08-05
+## [1.0.18]
 
 ### Fixed
 - Fixed TypeScript build errors by reverting `trace` back to `silly` log level
@@ -37,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Command timeout reduced to 5 seconds for faster failure detection
 - Removed rate limiting as real issue was socket routing bug
 
-## [1.0.17] - 2025-08-05
+## [1.0.17]
 
 ### Fixed
 - **CRITICAL**: Removed fake UI state overrides that masked real device command failures
@@ -49,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Device role information included in status logging
 - UDP coordination patterns visible at silly log level
 
-## [1.0.16] - 2025-08-05
+## [1.0.16]
 
 ### Fixed
 - Fixed Home Assistant add-on README architecture badges showing wrong architectures
@@ -60,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced log level configuration mapping from HA addon settings to application
 - Improved logging levels and optimized log output
 
-## [1.0.15] - 2025-08-05
+## [1.0.15]
 
 ### Added
 - Initial deep debugging capabilities for device command analysis
@@ -70,25 +92,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Log level configuration not being passed from Home Assistant add-on settings
 - Various logging improvements for better debugging visibility
-
-## [1.0.21] - 2025-08-05
-
-### Fixed
-- **Changelog Visibility**: Added CHANGELOG.md to add-on directory for Home Assistant UI
-- Ensures changelog is properly displayed in Home Assistant add-on store
-
-## [1.0.20] - 2025-08-05
-
-### Added
-- **New Sensor**: Dedicated preset mode sensor for Home Assistant
-  - Creates separate `sensor.<device_serial>_preset_mode` entity for each device
-  - Shows current operating mode (SMART, INTAKE, AUTO, AWAY_HOME, etc.)
-  - Uses `mdi:tune-variant` icon for clear visual identification
-  - Automatically discovered when devices connect
-
-### Changed
-- Enhanced Home Assistant integration with additional sensor entities
-- Improved device visibility for dashboards and automations
 
 ## [Unreleased]
 
@@ -101,8 +104,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Installation & Upgrade Notes
 
-### v1.0.19 (Current)
-- **Critical Update**: Essential for multi-device setups where MASTER and SLAVE devices connect from the same network
+### v1.0.22 (Current)
+- **Documentation**: Corrected changelog format and removed incorrect dates
+
+### v1.0.21
+- **Visibility**: Changelog now properly displayed in Home Assistant add-on store
+
+### v1.0.20
+- **New Feature**: Individual preset mode sensors for enhanced device monitoring
+
+### v1.0.19 (Critical Update)
+- **Essential**: Critical for multi-device setups where MASTER and SLAVE devices connect from the same network
 - **Breaking**: Invalid fan speed commands will now be rejected instead of mapped to MEDIUM
 - **UI**: Home Assistant fan controls will only show valid options (low/medium/high)
 
