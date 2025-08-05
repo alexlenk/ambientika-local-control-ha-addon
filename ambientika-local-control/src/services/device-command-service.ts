@@ -306,7 +306,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars.forEach((octet: string) => {
-                buffer.writeInt8(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
         }
