@@ -71,32 +71,30 @@ export class DeviceStorageService {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.silly(`Storage service local data update received: `, device);
             
-            // Check if we have a pending command for this device
+            // Check if we have a pending command for this device - FOR DEBUGGING ONLY
             const lastCommand = this.lastSentCommands.get(device.serialNumber);
             if (lastCommand) {
+                // Check if device applied the command
                 let commandApplied = true;
                 
-                // Check operating mode override
                 if (lastCommand.operatingMode && device.operatingMode !== lastCommand.operatingMode) {
-                    this.log.debug(`Device ${device.serialNumber} pending command: expected ${lastCommand.operatingMode}, got ${device.operatingMode} - overriding`);
-                    device.operatingMode = lastCommand.operatingMode;
+                    this.log.warn(`Device ${device.serialNumber} REJECTED command: sent ${lastCommand.operatingMode}, device reports ${device.operatingMode}`);
                     commandApplied = false;
                 }
                 
-                // Check fan speed override
                 if (lastCommand.fanSpeed && device.fanSpeed !== lastCommand.fanSpeed.toUpperCase()) {
-                    this.log.debug(`Device ${device.serialNumber} pending command: expected ${lastCommand.fanSpeed}, got ${device.fanSpeed} - overriding`);
-                    device.fanSpeed = lastCommand.fanSpeed.toUpperCase();
+                    this.log.warn(`Device ${device.serialNumber} REJECTED fanSpeed: sent ${lastCommand.fanSpeed}, device reports ${device.fanSpeed}`);
                     commandApplied = false;
                 }
                 
-                // Remove command only if device actually matches what we sent
                 if (commandApplied) {
                     this.log.info(`Device ${device.serialNumber} applied command successfully: ${JSON.stringify(lastCommand)}`);
                     this.lastSentCommands.delete(device.serialNumber);
                 } else {
                     this.log.debug(`Device ${device.serialNumber} command still pending: ${JSON.stringify(lastCommand)}`);
                 }
+                
+                // DO NOT OVERRIDE DEVICE STATE - ALWAYS SHOW REALITY
             }
             
             this.saveDevice(device);

@@ -59,7 +59,7 @@ export class LocalSocketService {
             if (data.length === 21) {
                 const remoteAddress = serverSocket.remoteAddress || '';
                 const device = this.deviceMapper.deviceFromSocketBuffer(data, remoteAddress);
-                this.log.info(`Device status: ${device.serialNumber} → ${device.operatingMode} (${device.fanSpeed})`);
+                this.log.info(`Device status: ${device.serialNumber} [${device.deviceRole}] → ${device.operatingMode} (${device.fanSpeed})`);
                 this.eventService.deviceStatusUpdate(device);
             }
         });

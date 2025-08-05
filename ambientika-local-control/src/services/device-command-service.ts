@@ -45,11 +45,19 @@ export class DeviceCommandService {
     }
 
     private handleOperatingModeUpdate(opMode: OperatingModeDto, serialNumber: string): void {
+        this.log.info(`=== DEEP COMMAND ANALYSIS for ${serialNumber} ===`);
+        this.log.info(`Command: ${JSON.stringify(opMode)}`);
+        
         this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
             (dto: DeviceDto | undefined) => {
                 if (dto) {
                     const device = this.deviceMapper.deviceFromDto(dto);
+                    this.log.info(`Current device state: mode=${device.operatingMode}, fanSpeed=${device.fanSpeed}, role=${device.deviceRole}`);
+                    
                     const data = this.getUpdateBufferData(opMode, device);
+                    this.log.info(`Generated command buffer: ${data.toString('hex')}`);
+                    this.analyzeCommandBuffer(data, opMode, device);
+                    
                     this.localSocketDataUpdate(data, device.remoteAddress);
                 }
             });
@@ -100,6 +108,45 @@ export class DeviceCommandService {
             buffer.writeInt8(lightSensitivity.valueOf(), offset);
         }
         return buffer;
+    }
+
+    private analyzeCommandBuffer(buffer: Buffer, opMode: OperatingModeDto, device: Device): void {
+        this.log.info(`=== BUFFER ANALYSIS ===`);
+        this.log.info(`Buffer length: ${buffer.length} bytes`);
+        this.log.info(`Hex: ${buffer.toString('hex')}`);
+        
+        // Parse buffer structure
+        this.log.info(`Byte 0: ${buffer[0].toString(16)} (should be 0x02)`);
+        this.log.info(`Byte 1: ${buffer[1].toString(16)} (should be 0x00)`);
+        
+        // Serial number (bytes 2-7)
+        const serialHex = buffer.slice(2, 8).toString('hex');
+        this.log.info(`Serial (bytes 2-7): ${serialHex} (should be ${device.serialNumber})`);
+        
+        // Command byte (should be 0x01)
+        this.log.info(`Command byte 8: ${buffer[8].toString(16)} (should be 0x01)`);
+        
+        // Operating mode
+        const operatingModeByte = buffer[9];
+        this.log.info(`Operating mode byte 9: ${operatingModeByte} (requested: ${opMode.operatingMode})`);
+        
+        // Fan speed
+        const fanSpeedByte = buffer[10];
+        this.log.info(`Fan speed byte 10: ${fanSpeedByte} (current device: ${device.fanSpeed})`);
+        
+        // Remaining bytes
+        for (let i = 11; i < buffer.length; i++) {
+            this.log.info(`Byte ${i}: ${buffer[i].toString(16)}`);
+        }
+        
+        // Check for potential issues
+        if (device.deviceRole === 'SLAVE_OPPOSITE_MASTER' || device.deviceRole === 'SLAVE') {
+            this.log.warn(`⚠️  Device is SLAVE role - might reject master commands!`);
+        }
+        
+        if (device.operatingMode === 'MASTER_SLAVE_FLOW' && opMode.operatingMode !== 'MASTER_SLAVE_FLOW') {
+            this.log.warn(`⚠️  Device locked in MASTER_SLAVE_FLOW - might reject mode changes!`);
+        }
     }
 
     private localSocketDataUpdate(data: Buffer, remoteAddress: string): void {
