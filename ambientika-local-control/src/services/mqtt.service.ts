@@ -386,6 +386,7 @@ export class MqttService {
         topics.push((process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.FILTER_RESET_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
@@ -487,6 +488,90 @@ export class MqttService {
         }
     }
 
+    private handleRawCommand(serialNumber: string, message: Buffer): void {
+        try {
+            const hexString = message.toString().trim();
+            this.log.info(`Raw command received for ${serialNumber}: ${hexString}`);
+            
+            // Convert hex string to buffer
+            const commandBuffer = this.hexStringToBuffer(hexString);
+            if (commandBuffer) {
+                this.log.info(`Sending raw command to ${serialNumber}: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
+                this.sendRawCommandToDevice(serialNumber, commandBuffer);
+            } else {
+                this.log.error(`Invalid hex string format for ${serialNumber}: ${hexString}`);
+            }
+        } catch (error) {
+            this.log.error(`Failed to process raw command for ${serialNumber}: ${error}`);
+        }
+    }
+
+    private hexStringToBuffer(hexString: string): Buffer | null {
+        try {
+            // Remove any whitespace and ensure even number of characters
+            const cleanHex = hexString.replace(/\s+/g, '');
+            if (cleanHex.length % 2 !== 0) {
+                this.log.error(`Hex string must have even number of characters: ${cleanHex}`);
+                return null;
+            }
+            
+            // Validate hex characters
+            if (!/^[0-9a-fA-F]+$/.test(cleanHex)) {
+                this.log.error(`Invalid hex characters in string: ${cleanHex}`);
+                return null;
+            }
+            
+            return Buffer.from(cleanHex, 'hex');
+        } catch (error) {
+            this.log.error(`Error converting hex string to buffer: ${error}`);
+            return null;
+        }
+    }
+
+    private sendRawCommandToDevice(serialNumber: string, commandBuffer: Buffer): void {
+        this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
+            (dto: DeviceDto | undefined) => {
+                if (dto) {
+                    const device = this.deviceMapper.deviceFromDto(dto);
+                    this.log.info(`Sending raw command to device ${serialNumber} at ${device.remoteAddress}`);
+                    
+                    // Log buffer analysis
+                    this.logBufferAnalysis(commandBuffer, serialNumber);
+                    
+                    // Send via local socket
+                    this.eventService.localSocketDataUpdate(commandBuffer, device.remoteAddress);
+                } else {
+                    this.log.error(`Device ${serialNumber} not found for raw command`);
+                }
+            });
+    }
+
+    private logBufferAnalysis(buffer: Buffer, serialNumber: string): void {
+        this.log.info(`=== RAW COMMAND ANALYSIS for ${serialNumber} ===`);
+        this.log.info(`Buffer length: ${buffer.length} bytes`);
+        this.log.info(`Hex: ${buffer.toString('hex')}`);
+        
+        // Byte-by-byte analysis
+        for (let i = 0; i < buffer.length; i++) {
+            const byte = buffer[i];
+            this.log.info(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
+        }
+        
+        // Common pattern analysis
+        if (buffer.length >= 8) {
+            const possibleSerial = buffer.slice(2, 8).toString('hex');
+            this.log.info(`Possible serial number (bytes 2-7): ${possibleSerial}`);
+        }
+        
+        if (buffer.length >= 2) {
+            this.log.info(`Header (bytes 0-1): 0x${buffer[0].toString(16).padStart(2, '0')} 0x${buffer[1].toString(16).padStart(2, '0')}`);
+        }
+        
+        if (buffer.length >= 9) {
+            this.log.info(`Command byte (byte 8): 0x${buffer[8].toString(16).padStart(2, '0')} (${buffer[8]})`);
+        }
+    }
+
     private handleCommandStatusMessage(topic: string, message: Buffer): void {
         const serialNumber: string | undefined = this.extractSerialNumberFromTopic(topic);
         if (serialNumber) {
@@ -497,6 +582,8 @@ export class MqttService {
                 this.handleFilterReset(serialNumber);
             } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.DEVICE_SETUP_COMMAND_TOPIC) {
                 this.handleDeviceSetup(serialNumber, message);
+            } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.RAW_COMMAND_TOPIC) {
+                this.handleRawCommand(serialNumber, message);
             } else {
                 this.log.warn(`Could not build command for ${serialNumber} from ${message} on ${topic}`);
             }
