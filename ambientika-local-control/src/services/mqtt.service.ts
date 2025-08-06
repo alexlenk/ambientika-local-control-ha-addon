@@ -108,6 +108,10 @@ export class MqttService {
             // Also publish fan status from device data as fallback
             this.sendFanStatusFromDevice(device);
             this.sendFanModeFromDevice(device);
+            
+            // Publish house ID and zone ID
+            this.sendHouseId(device);
+            this.sendZoneId(device);
         });
     }
 
@@ -193,6 +197,16 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
                     device.serialNumber, 'presetmode');
                 this.publish(topic, presetModeDiscovery);
+
+                const houseIdDiscovery = this.hAAutoDiscoveryService.getHouseIdSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'houseid');
+                this.publish(topic, houseIdDiscovery);
+
+                const zoneIdDiscovery = this.hAAutoDiscoveryService.getZoneIdSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'zoneid');
+                this.publish(topic, zoneIdDiscovery);
             });
         }
     }
@@ -323,6 +337,16 @@ export class MqttService {
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, deviceBroadcastStatus.serialNumber),
                 deviceBroadcastStatus.fanMode.toString());
         }
+    }
+
+    private sendHouseId(device: Device) {
+        this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
+            device.houseId.toString());
+    }
+
+    private sendZoneId(device: Device) {
+        this.publish(this.getDevicePublishTopic(process.env.ZONE_ID_TOPIC, device.serialNumber),
+            device.zoneId.toString());
     }
 
     private publish(topic: string, message: string): void {

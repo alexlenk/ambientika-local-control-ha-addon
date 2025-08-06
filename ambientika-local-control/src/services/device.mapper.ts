@@ -45,6 +45,20 @@ export class DeviceMapper {
         const lastOperatingMode = OperatingMode[this.getIntFromBufferSlice(18, 19)];
         const lightSensitivity = LightSensitivity[this.getIntFromBufferSlice(19, 20)];
         const signalStrength = this.getIntFromBufferSlice(20, 21);
+        
+        // Extract house ID (bytes 18-21, but we need to handle buffer length safely)
+        let houseId = 0;
+        let zoneId = 0;
+        
+        if (this.buffer.length >= 22) {
+            // House ID is in bytes 18-21 (little-endian)
+            houseId = this.getUInt32LEFromBufferSlice(18, 22);
+        }
+        
+        // Zone ID could be extracted from UDP broadcasts or estimated from device communication patterns
+        // For now, we'll use a placeholder - this may need device-specific logic
+        zoneId = 0;
+        
         return new Device(
             serialNumber,
             operatingMode,
@@ -60,7 +74,9 @@ export class DeviceMapper {
             lastOperatingMode,
             lightSensitivity,
             remoteAddress,
-            signalStrength
+            signalStrength,
+            houseId,
+            zoneId
         )
     }
 
@@ -190,7 +206,9 @@ export class DeviceMapper {
             dto.lastOperatingMode,
             dto.lightSensitivity,
             dto.remoteAddress,
-            0
+            0,
+            dto.houseId || 0,
+            dto.zoneId || 0
         );
     }
 }

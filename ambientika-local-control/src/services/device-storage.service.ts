@@ -61,6 +61,8 @@ export class DeviceStorageService {
                 lastOperatingMode VARCHAR(20) NOT NULL,
                 lightSensitivity  VARCHAR(20) NOT NULL,
                 remoteAddress     VARCHAR(255) DEFAULT NULL,
+                houseId           INTEGER DEFAULT 0,
+                zoneId            INTEGER DEFAULT 0,
                 lastUpdate        VARCHAR(255) DEFAULT NULL,
                 firstSeen         VARCHAR(255) DEFAULT NULL
             );
@@ -227,7 +229,7 @@ export class DeviceStorageService {
             'deviceRole,' +
             'lastOperatingMode,' +
             'lightSensitivity,' +
-            'remoteAddress,firstSeen,lastUpdate';
+            'remoteAddress,houseId,zoneId,firstSeen,lastUpdate';
 
         valueString += ') VALUES (';
         if (id) {
@@ -246,7 +248,7 @@ export class DeviceStorageService {
             '$deviceRole,' +
             '$lastOperatingMode,' +
             '$lightSensitivity,' +
-            '$remoteAddress,$firstSeen,$lastUpdate';
+            '$remoteAddress,$houseId,$zoneId,$firstSeen,$lastUpdate';
         valueString += ')';
         return valueString;
     }
@@ -267,6 +269,8 @@ export class DeviceStorageService {
             $lastOperatingMode: device.lastOperatingMode,
             $lightSensitivity: device.lightSensitivity,
             $remoteAddress: device.remoteAddress,
+            $houseId: device.houseId,
+            $zoneId: device.zoneId,
             $lastUpdate: Instant.now().toString(),
             $firstSeen: Instant.now().toString()
         } as DeviceQueryParams;

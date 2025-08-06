@@ -42,13 +42,15 @@ Make changes to the TypeScript code in `ambientika-local-control/src/`
 
 Update version in these files:
 - `ambientika-local-control/config.yaml` - Change `version: "X.X.X"`
-- `CHANGELOG.md` - Add new version entry with changes
+- `CHANGELOG.md` - Add new version entry with changes and appealing format
 
 ### 3. Commit and Push
 
 ```bash
 git add .
-git commit -m "v1.0.X: Description of changes
+git commit -m "v1.0.X: Descriptive Release Name
+
+Brief description of changes
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
@@ -56,20 +58,23 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 git push
 ```
 
-### 4. Tag Release
+### 4. Create Named Release Tag
+
+**CRITICAL**: Every release must have a descriptive name and properly tagged build.
 
 ```bash
-git tag v1.0.X
+git tag -a v1.0.X -m "v1.0.X: Descriptive Release Name"
 git push --tags
 ```
 
-### 5. Automatic Build
+### 5. Automatic Build and Release
 
 GitHub Actions will automatically:
-- Build Docker containers for both architectures
+- Build Docker containers for both architectures  
 - Run tests and validation
-- Push containers to GitHub Container Registry
+- Push containers to GitHub Container Registry with version tag
 - Make them available for Home Assistant installation
+- **Build name appears in GitHub releases**
 
 ## Home Assistant Add-on Installation
 
@@ -90,15 +95,18 @@ Users install via:
    version: "1.0.26"
    ```
 
-2. **`CHANGELOG.md`**:
+2. **`CHANGELOG.md`** (use appealing format):
    ```markdown
-   ## [1.0.26]
+   ## v1.0.26 - Descriptive Release Name
    
-   ### Added
+   **Added**
    - New feature description
    
-   ### Fixed
+   **Fixed**  
    - Bug fix description
+   
+   **Changed**
+   - Enhancement description
    ```
 
 ## Container Registry
@@ -135,17 +143,41 @@ Users install via:
 
 ## Development Workflow for Claude Code Sessions
 
-When working on this project in Claude Code:
+When working on this project in Claude Code, follow these **mandatory steps**:
+
+### Release Checklist
 
 1. **Make code changes** in `ambientika-local-control/src/`
 2. **Update version** in `config.yaml`
-3. **Update changelog** with changes
-4. **Commit changes** with descriptive message
-5. **Create Git tag**: `git tag v1.0.X`
-6. **Push everything**: `git push && git push --tags`
-7. **Wait for GitHub Actions** to build and deploy
+3. **Update changelog** with appealing format (no starting sentence, smaller version numbers)
+4. **Commit with descriptive name**: 
+   ```bash
+   git commit -m "v1.0.X: Descriptive Release Name"
+   ```
+5. **Create annotated tag with name**:
+   ```bash
+   git tag -a v1.0.X -m "v1.0.X: Descriptive Release Name"
+   ```
+6. **Push everything**: 
+   ```bash
+   git push && git push --tags
+   ```
+7. **Wait for GitHub Actions** to build and deploy (5-10 minutes)
+8. **Verify release appears** in GitHub Releases with proper name
 
-The containers will be available within 5-10 minutes for Home Assistant users to install.
+### Changelog Format Requirements
+
+- **Remove** opening sentence "All notable changes to this project will be documented in this file"
+- **Use smaller version format**: `v1.0.26 - Release Name` instead of `[1.0.26]`
+- **Bold section headers**: `**Added**`, `**Fixed**`, `**Changed**`
+- **Descriptive release names**: Each version needs meaningful name
+- **Clean formatting**: No extra spacing or complex markdown
+
+### Every Release Must Have:
+- ✅ Descriptive release name
+- ✅ Updated changelog in new format
+- ✅ Annotated Git tag
+- ✅ GitHub release entry (auto-generated from tag)
 
 ## Contact
 

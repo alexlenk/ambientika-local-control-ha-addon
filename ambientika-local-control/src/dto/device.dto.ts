@@ -17,4 +17,6 @@ export interface DeviceDto {
     remoteAddress: string;
     lastOperatingMode: string;
     lightSensitivity: string;
+    houseId: number;
+    zoneId: number;
 }

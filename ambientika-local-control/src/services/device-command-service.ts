@@ -297,7 +297,7 @@ export class DeviceCommandService {
     }
 
     private getDeviceSetupBufferData(deviceSetupDto: DeviceSetupDto): Buffer {
-        const buffer = Buffer.alloc(15);
+        const buffer = Buffer.alloc(16);
         buffer.writeInt8(0x02);
         buffer.writeInt8(0x00, 1);
         
@@ -311,21 +311,31 @@ export class DeviceCommandService {
             });
         }
         
-        // Command type for setup (assuming 0x04 based on pattern)
-        buffer.writeInt8(0x04, offset);
+        // Command bytes (discovered format: 00 02 for device setup)
+        buffer.writeInt8(0x00, offset);
+        offset++;
+        buffer.writeInt8(0x02, offset);
         offset++;
         
-        // Device role
+        // Zone index (byte 10)
+        buffer.writeInt8(deviceSetupDto.zoneIndex, offset);
+        offset++;
+        
+        // Device role (byte 11)
         const roleValue = DeviceRole[deviceSetupDto.deviceRole as keyof typeof DeviceRole];
         buffer.writeInt8(roleValue, offset);
         offset++;
         
-        // Zone index
-        buffer.writeInt8(deviceSetupDto.zoneIndex, offset);
-        offset++;
-        
-        // House ID (4 bytes, little endian)
+        // House ID (4 bytes, little endian, bytes 12-15)
         buffer.writeUInt32LE(deviceSetupDto.houseId, offset);
+        
+        this.log.info(`Device setup buffer breakdown:
+        Header: ${buffer.slice(0, 2).toString('hex')}
+        Serial: ${buffer.slice(2, 8).toString('hex')} 
+        Command: ${buffer.slice(8, 10).toString('hex')}
+        Zone: ${buffer[10]} 
+        Role: ${buffer[11]} (${deviceSetupDto.deviceRole})
+        House ID: ${buffer.slice(12, 16).toString('hex')} (${deviceSetupDto.houseId})`);
         
         return buffer;
     }
