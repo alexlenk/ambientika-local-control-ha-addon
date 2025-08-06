@@ -15,6 +15,7 @@ import {DeviceMapper} from './device.mapper';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
 import {DeviceSetupDto} from '../dto/device-setup.dto';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
+import {DeviceMetadataService} from './device-metadata.service';
 
 dotenv.config()
 
@@ -29,6 +30,7 @@ export class MqttService {
 
     private readonly deviceMapper: DeviceMapper;
     private readonly hAAutoDiscoveryService: HAAutoDiscoveryService;
+    private readonly deviceMetadataService: DeviceMetadataService;
     private readonly deviceTopicSubscriptions: Set<string> = new Set<string>();
 
     constructor(private log: Logger,
@@ -37,6 +39,7 @@ export class MqttService {
         this.log.debug(`Initializing MqttService`);
         this.deviceMapper = new DeviceMapper(this.log);
         this.hAAutoDiscoveryService = new HAAutoDiscoveryService(this);
+        this.deviceMetadataService = new DeviceMetadataService(this.log, this.eventService);
         this.connect();
         this.initEventListener();
     }
@@ -81,9 +84,10 @@ export class MqttService {
         });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
-                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}`);
+                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}, houseId=${deviceBroadcastStatus.houseId}`);
                 this.sendFanStatus(deviceBroadcastStatus);
                 this.sendFanMode(deviceBroadcastStatus);
+                this.sendHouseId(deviceBroadcastStatus);
             });
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             if (!this.deviceTopicSubscriptions.has(device.serialNumber)) {
@@ -108,6 +112,7 @@ export class MqttService {
             // Also publish fan status from device data as fallback
             this.sendFanStatusFromDevice(device);
             this.sendFanModeFromDevice(device);
+            this.sendDeviceHouseId(device);
         });
     }
 
@@ -193,6 +198,11 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
                     device.serialNumber, 'presetmode');
                 this.publish(topic, presetModeDiscovery);
+
+                const houseIdDiscovery = this.hAAutoDiscoveryService.getHouseIdSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'houseid');
+                this.publish(topic, houseIdDiscovery);
             });
         }
     }
@@ -322,6 +332,27 @@ export class MqttService {
         if (deviceBroadcastStatus.serialNumber) {
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, deviceBroadcastStatus.serialNumber),
                 deviceBroadcastStatus.fanMode.toString());
+        }
+    }
+
+    private sendHouseId(deviceBroadcastStatus: DeviceBroadcastStatus) {
+        if (deviceBroadcastStatus.serialNumber && deviceBroadcastStatus.houseId !== undefined) {
+            this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, deviceBroadcastStatus.serialNumber),
+                deviceBroadcastStatus.houseId.toString());
+        }
+    }
+
+    private sendDeviceHouseId(device: Device) {
+        const houseId = this.deviceMetadataService.getDeviceHouseId(device.serialNumber);
+        if (houseId > 0) {
+            this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
+                houseId.toString());
+        } else {
+            const inferredHouseId = this.deviceMetadataService.inferHouseId(device.serialNumber);
+            if (inferredHouseId > 0) {
+                this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
+                    inferredHouseId.toString());
+            }
         }
     }
 

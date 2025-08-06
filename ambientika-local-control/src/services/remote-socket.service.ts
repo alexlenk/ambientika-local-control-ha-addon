@@ -67,6 +67,7 @@ export class RemoteSocketService {
             if (data.length === 15) {
                 const deviceSetup = this.deviceMapper.deviceSetupFromSocketBuffer(data);
                 this.log.debug('Created device setup from data %o', deviceSetup);
+                this.eventService.deviceSetupUpdate(deviceSetup);
             }
         });
     }

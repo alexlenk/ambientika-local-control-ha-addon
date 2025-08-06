@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.29]
+
+### Added
+- House ID sensor functionality for all devices
+- DeviceMetadataService for tracking house IDs from multiple sources
+- Device broadcast status model enhanced with house ID field
+- Support for house ID extraction from both UDP broadcasts and device setup messages
+- Automatic house ID inference for devices that don't broadcast directly
+- Home Assistant auto-discovery configuration for house ID sensors
+
+### Enhanced
+- MQTT service now publishes house ID sensor data
+- UDP broadcast service passes house ID metadata
+- Remote socket service triggers device setup events
+- Device mapper includes house ID in broadcast status creation
+
 ## [1.0.22]
 
 ### Fixed

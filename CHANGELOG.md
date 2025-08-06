@@ -2,72 +2,85 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.26]
+### Version 1.0.29 - House ID Sensor Support
 
-### Added
+#### Added
+- House ID sensor for all devices showing the network identification
+- Device metadata tracking from both UDP broadcasts and device setup messages
+- Automatic house ID inference for devices that don't broadcast directly
+- Support for house ID extraction from both master and slave devices
+
+#### Enhanced
+- Device broadcast status model now includes house ID data
+- MQTT service publishes house ID sensor data to Home Assistant
+- Home Assistant auto-discovery creates house ID sensors with home icon
+
+### Version 1.0.26 - Raw Command Testing
+
+#### Added
 - Raw command MQTT topic for testing device protocols (`ambientika/%serialNumber/raw_command/set`)
 - Hex string to buffer conversion with validation
 - Detailed logging and analysis of raw commands sent to devices
 - Byte-by-byte command analysis for debugging device communication
 
-### Changed
+#### Changed
 - Enhanced MQTT service with raw command testing capabilities for protocol discovery
 
-## [1.0.25]
+### Version 1.0.25 - Device Role Accuracy
 
-### Added
+#### Added
 - Remove artificial MASTER fallback for undefined device roles to show true device state
 - Remove device-specific debug code
 
-### Changed
+#### Changed
 - Device role parsing now shows undefined when device role is unmapped instead of defaulting to MASTER
 
-## [1.0.24]
+### Version 1.0.24 - Device Setup Protocol
 
-### Added
+#### Added
 - MQTT-based device setup functionality to convert devices between MASTER/SLAVE roles
 - Device setup command protocol with 15-byte buffer generation
 - Event system integration for device setup commands
 - TCP socket communication for device role assignment
 
-### Fixed
+#### Fixed
 - RangeError in device setup by changing writeInt8 to writeUInt8 for serial number bytes
 - Device role constraint errors with proper undefined handling
 
-## [1.0.23]
+### Version 1.0.23 - Database Constraints Fix
 
-### Fixed
+#### Fixed
 - SQLITE_CONSTRAINT errors for undefined device roles
 - Database constraint handling for device role field
 
-## [1.0.22]
+### Version 1.0.22 - Changelog Format
 
-### Fixed
+#### Fixed
 - **Changelog Format**: Removed incorrect dates from changelog entries
 - Simplified format for better readability and accuracy
 
-## [1.0.21]
+### Version 1.0.21 - Changelog Visibility
 
-### Fixed
+#### Fixed
 - **Changelog Visibility**: Added CHANGELOG.md to add-on directory for Home Assistant UI
 - Ensures changelog is properly displayed in Home Assistant add-on store
 
-## [1.0.20]
+### Version 1.0.20 - Preset Mode Sensor
 
-### Added
+#### Added
 - **New Sensor**: Dedicated preset mode sensor for Home Assistant
   - Creates separate `sensor.<device_serial>_preset_mode` entity for each device
   - Shows current operating mode (SMART, INTAKE, AUTO, AWAY_HOME, etc.)
   - Uses `mdi:tune-variant` icon for clear visual identification
   - Automatically discovered when devices connect
 
-### Changed
+#### Changed
 - Enhanced Home Assistant integration with additional sensor entities
 - Improved device visibility for dashboards and automations
 
-## [1.0.19]
+### Version 1.0.19 - Critical Connection Routing Fix
 
-### Fixed
+#### Fixed
 - **CRITICAL**: Fixed socket connection routing bug causing devices to become permanently unresponsive
   - Commands now route to correct device based on serial number mapping instead of IP address only
   - Prevents MASTER socket from being overwritten when SLAVE device connects from same IP
@@ -77,63 +90,63 @@ All notable changes to this project will be documented in this file.
   - Fixed AUTO->MEDIUM mapping that was creating confusion
   - Added explicit `fan_modes` configuration to prevent non-existent options
 
-### Changed
+#### Changed
 - Improved command routing with IP:port connection keys instead of IP-only mapping
 - Enhanced error handling for invalid fan speed commands
 - Better device connection logging with connection key details
 
-## [1.0.18]
+### Version 1.0.18 - Build Error Fix
 
-### Fixed
+#### Fixed
 - Fixed TypeScript build errors by reverting `trace` back to `silly` log level
 - Winston Logger compatibility: Updated config schema to match Winston levels (silly|debug|info|warn|error)
 
-### Added
+#### Added
 - Deep command analysis for debugging command rejections
 - Enhanced UDP broadcast logging with device roles and coordination details
 - Improved command transmission debugging with hex buffer output
 
-### Changed
+#### Changed
 - Command timeout reduced to 5 seconds for faster failure detection
 - Removed rate limiting as real issue was socket routing bug
 
-## [1.0.17]
+### Version 1.0.17 - Real Device State
 
-### Fixed
+#### Fixed
 - **CRITICAL**: Removed fake UI state overrides that masked real device command failures
 - Fixed command persistence logic to show actual device state instead of assumed success
 - Enhanced logging to detect when devices reject operating mode commands
 
-### Added
+#### Added
 - Comprehensive buffer analysis showing byte-by-byte breakdown for debugging
 - Device role information included in status logging
 - UDP coordination patterns visible at silly log level
 
-## [1.0.16]
+### Version 1.0.16 - Architecture Badges
 
-### Fixed
+#### Fixed
 - Fixed Home Assistant add-on README architecture badges showing wrong architectures
 - Updated architecture badges to show only aarch64 and amd64
 - Corrected add-on description text
 
-### Changed
+#### Changed
 - Enhanced log level configuration mapping from HA addon settings to application
 - Improved logging levels and optimized log output
 
-## [1.0.15]
+### Version 1.0.15 - Deep Debugging
 
-### Added
+#### Added
 - Initial deep debugging capabilities for device command analysis
 - Command buffer hex output for protocol debugging
 - Enhanced device status logging with operating modes and fan speeds
 
-### Fixed
+#### Fixed
 - Log level configuration not being passed from Home Assistant add-on settings
 - Various logging improvements for better debugging visibility
 
-## [Unreleased]
+### Future Releases
 
-### Planned
+#### Planned
 - Additional protocol analysis features
 - Enhanced error recovery mechanisms
 - Performance optimizations for large deployments

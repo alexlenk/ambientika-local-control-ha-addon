@@ -6,6 +6,7 @@ import {RemoteInfo} from 'dgram';
 import {AppEvents} from '../models/enum/app-events.enum';
 import {Device} from '../models/device.model';
 import {DeviceMapper} from './device.mapper';
+import {DeviceMetadataService} from './device-metadata.service';
 
 dotenv.config();
 
@@ -14,10 +15,12 @@ export class UDPBroadcastService {
     private localAddressesSerialNumbers: Map<string, string> = new Map();
     private listener: Map<number, Socket> = new Map();
     private deviceMapper: DeviceMapper;
+    private deviceMetadataService: DeviceMetadataService;
 
     constructor(private log: Logger, private eventService: EventService) {
         this.log.debug('Construct UDPBroadcastService');
         this.deviceMapper = new DeviceMapper(this.log);
+        this.deviceMetadataService = new DeviceMetadataService(this.log, this.eventService);
         this.initialize();
     }
 
@@ -41,7 +44,8 @@ export class UDPBroadcastService {
             this.log.silly(`Received data on udp socket ${listenerPort} for 
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
             const serialNumber = this.localAddressesSerialNumbers.get(remoteInfo.address);
-            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber);
+            const houseId = serialNumber ? this.deviceMetadataService.getDeviceHouseId(serialNumber) : undefined;
+            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber, houseId);
             this.log.silly('Created device status broadcast from data %o', deviceStatus);
             if (deviceStatus.serialNumber) {
                 this.eventService.deviceBroadcastStatus(deviceStatus);

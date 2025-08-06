@@ -42,7 +42,8 @@ Make changes to the TypeScript code in `ambientika-local-control/src/`
 
 Update version in these files:
 - `ambientika-local-control/config.yaml` - Change `version: "X.X.X"`
-- `CHANGELOG.md` - Add new version entry with changes
+- `CHANGELOG.md` - Add new version entry with changes (root level changelog)
+- `ambientika-local-control/CHANGELOG.md` - Update service-level changelog
 
 ### 3. Commit and Push
 
@@ -90,7 +91,18 @@ Users install via:
    version: "1.0.26"
    ```
 
-2. **`CHANGELOG.md`**:
+2. **`CHANGELOG.md`** (Home Assistant Add-on level):
+   ```markdown
+   ### [1.0.26]
+   
+   #### Added
+   - New feature description
+   
+   #### Fixed
+   - Bug fix description
+   ```
+
+3. **`ambientika-local-control/CHANGELOG.md`** (Service level):
    ```markdown
    ## [1.0.26]
    
@@ -139,7 +151,7 @@ When working on this project in Claude Code:
 
 1. **Make code changes** in `ambientika-local-control/src/`
 2. **Update version** in `config.yaml`
-3. **Update changelog** with changes
+3. **Update both changelogs** with changes (root `CHANGELOG.md` and `ambientika-local-control/CHANGELOG.md`)
 4. **Commit changes** with descriptive message
 5. **Create Git tag**: `git tag v1.0.X`
 6. **Push everything**: `git push && git push --tags`
