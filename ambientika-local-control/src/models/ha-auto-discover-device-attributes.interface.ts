@@ -3,4 +3,5 @@ export interface HaAutoDiscoverDeviceAttributes {
     device_class?: string;
     unit_of_measurement?: string;
     icon?: string;
+    entity_category?: string;
 }

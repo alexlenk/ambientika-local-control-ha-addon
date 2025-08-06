@@ -1,11 +1,74 @@
-# Changelog
+## v1.0.28 - Build Fix and Documentation Update
 
-All notable changes to this project will be documented in this file.
+**Fixed**
+- TypeScript build error: Added `entity_category` property to HaAutoDiscoverDeviceAttributes interface
+- Updated addon changelog formatting to remove starting sentence and use appealing format
 
-## [1.0.22]
+**Changed**  
+- Enhanced build and deployment documentation with addon changelog requirements
+- Improved changelog format guidelines for both root and addon changelogs
 
-### Fixed
-- **Changelog Format**: Removed incorrect dates from changelog entries
+## v1.0.27 - Enhanced Device Setup and Sensors
+
+**Added**
+- JSON-based device setup functionality using correct 16-byte protocol format
+- House ID sensor for Home Assistant (`sensor.<device_serial>_house_id`)
+- Zone ID sensor for Home Assistant (`sensor.<device_serial>_zone_id`) 
+- Enhanced device model with house ID and zone ID properties
+- Database schema updated to store house ID and zone ID
+- MQTT topics for house ID and zone ID publishing
+
+**Fixed**
+- Device setup buffer generation to use correct protocol format (00 02 command bytes)
+- Proper positioning of zone ID and device role in setup commands
+- Device mapper now extracts house ID from device status messages
+
+**Changed**
+- Enhanced device setup with detailed buffer analysis logging
+- Improved Home Assistant integration with diagnostic sensors
+
+## v1.0.26 - Raw Command Testing
+
+**Added**
+- Raw command MQTT topic for testing device protocols (`ambientika/%serialNumber/raw_command/set`)
+- Hex string to buffer conversion with validation
+- Detailed logging and analysis of raw commands sent to devices
+- Byte-by-byte command analysis for debugging device communication
+
+**Changed**
+- Enhanced MQTT service with raw command testing capabilities for protocol discovery
+
+## v1.0.25 - Device Role Visibility
+
+**Added**
+- Remove artificial MASTER fallback for undefined device roles to show true device state
+- Remove device-specific debug code
+
+**Changed**
+- Device role parsing now shows undefined when device role is unmapped instead of defaulting to MASTER
+
+## v1.0.24 - Device Setup System
+
+**Added**
+- MQTT-based device setup functionality to convert devices between MASTER/SLAVE roles
+- Device setup command protocol with 15-byte buffer generation
+- Event system integration for device setup commands
+- TCP socket communication for device role assignment
+
+**Fixed**
+- RangeError in device setup by changing writeInt8 to writeUInt8 for serial number bytes
+- Device role constraint errors with proper undefined handling
+
+## v1.0.23 - Database Constraints
+
+**Fixed**
+- SQLITE_CONSTRAINT errors for undefined device roles
+- Database constraint handling for device role field
+
+## v1.0.22 - Changelog Format
+
+**Fixed**
+- Removed incorrect dates from changelog entries
 - Simplified format for better readability and accuracy
 
 ## [1.0.21]

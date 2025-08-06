@@ -1,3 +1,13 @@
+## v1.0.28 - Build Fix and Documentation Update
+
+**Fixed**
+- TypeScript build error: Added `entity_category` property to HaAutoDiscoverDeviceAttributes interface
+- Updated addon changelog formatting to remove starting sentence and use appealing format
+
+**Changed**  
+- Enhanced build and deployment documentation with addon changelog requirements
+- Improved changelog format guidelines for both root and addon changelogs
+
 ## v1.0.27 - Enhanced Device Setup and Sensors
 
 **Added**

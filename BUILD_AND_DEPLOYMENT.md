@@ -40,9 +40,10 @@ Make changes to the TypeScript code in `ambientika-local-control/src/`
 
 ### 2. Version Update
 
-Update version in these files:
+Update version and changelog in these files:
 - `ambientika-local-control/config.yaml` - Change `version: "X.X.X"`
-- `CHANGELOG.md` - Add new version entry with changes and appealing format
+- `CHANGELOG.md` - Add new version entry with appealing format (no starting sentence, smaller version numbers)
+- `ambientika-local-control/CHANGELOG.md` - **CRITICAL**: Update the addon's internal changelog (visible in Home Assistant UI)
 
 ### 3. Commit and Push
 
@@ -148,36 +149,45 @@ When working on this project in Claude Code, follow these **mandatory steps**:
 ### Release Checklist
 
 1. **Make code changes** in `ambientika-local-control/src/`
-2. **Update version** in `config.yaml`
-3. **Update changelog** with appealing format (no starting sentence, smaller version numbers)
-4. **Commit with descriptive name**: 
+2. **Update version** in `ambientika-local-control/config.yaml`
+3. **Update root changelog** (`CHANGELOG.md`) with appealing format
+4. **Update addon changelog** (`ambientika-local-control/CHANGELOG.md`) - **MANDATORY**
+5. **Commit with descriptive name**: 
    ```bash
    git commit -m "v1.0.X: Descriptive Release Name"
    ```
-5. **Create annotated tag with name**:
+6. **Create annotated tag with name**:
    ```bash
    git tag -a v1.0.X -m "v1.0.X: Descriptive Release Name"
    ```
-6. **Push everything**: 
+7. **Push everything**: 
    ```bash
    git push && git push --tags
    ```
-7. **Wait for GitHub Actions** to build and deploy (5-10 minutes)
-8. **Verify release appears** in GitHub Releases with proper name
+8. **Wait for GitHub Actions** to build and deploy (5-10 minutes)
+9. **Verify release appears** in GitHub Releases with proper name
 
 ### Changelog Format Requirements
 
-- **Remove** opening sentence "All notable changes to this project will be documented in this file"
-- **Use smaller version format**: `v1.0.26 - Release Name` instead of `[1.0.26]`
+**Both changelogs** (`CHANGELOG.md` and `ambientika-local-control/CHANGELOG.md`) must follow this format:
+
+- **NO opening sentence** - Remove "All notable changes to this project will be documented in this file"
+- **Smaller version format**: `v1.0.26 - Release Name` instead of `[1.0.26]`
 - **Bold section headers**: `**Added**`, `**Fixed**`, `**Changed**`
 - **Descriptive release names**: Each version needs meaningful name
 - **Clean formatting**: No extra spacing or complex markdown
 
 ### Every Release Must Have:
 - ✅ Descriptive release name
-- ✅ Updated changelog in new format
+- ✅ Updated root changelog (`CHANGELOG.md`) in new format
+- ✅ Updated addon changelog (`ambientika-local-control/CHANGELOG.md`) in new format
 - ✅ Annotated Git tag
 - ✅ GitHub release entry (auto-generated from tag)
+
+### Critical Notes:
+- **Both changelogs** must be updated (root and addon)
+- **Addon changelog** is what users see in Home Assistant UI
+- **Root changelog** is for GitHub repository visitors
 
 ## Contact
 
