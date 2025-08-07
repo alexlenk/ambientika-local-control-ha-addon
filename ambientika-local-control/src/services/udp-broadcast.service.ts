@@ -47,9 +47,10 @@ export class UDPBroadcastService {
             const houseId = serialNumber ? this.deviceMetadataService.getDeviceHouseId(serialNumber) : undefined;
             const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber, houseId);
             this.log.silly('Created device status broadcast from data %o', deviceStatus);
-            if (deviceStatus.serialNumber) {
-                this.eventService.deviceBroadcastStatus(deviceStatus);
-            }
+            
+            // Always emit UDP broadcast with source address for house ID correlation
+            const sourceAddress = `${remoteInfo.address}:${remoteInfo.port}`;
+            this.eventService.deviceBroadcastStatus(deviceStatus, sourceAddress);
         });
 
         socket.on('listening', () => {

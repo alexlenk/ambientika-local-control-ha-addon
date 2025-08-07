@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.32 - Multi-House Network Support
+
+#### Added
+- Intelligent correlation system for house IDs in multi-apartment WiFi networks
+- Track UDP house IDs by IP:port to handle different houses on same network
+- Automatic correlation of TCP device connections with UDP house ID broadcasts
+- Support for multiple house networks sharing the same WiFi infrastructure
+
+#### Fixed
+- House ID sensor now works correctly in shared network environments
+- TCP devices now properly inherit house IDs from UDP broadcasts of same IP address
+- Device metadata service correlates devices within 30-second UDP broadcast window
+- Automatic cleanup of stale UDP house ID tracking data
+
+### Version 1.0.31 - House ID Endianness Fix
+
+#### Fixed
+- House ID sensor now uses correct big-endian (uint32BE) byte order instead of little-endian
+- House ID values like `00 00 2f 10` now correctly display as 12048 instead of 271515648
+- Added getUInt32BEFromBufferSlice method for proper UDP broadcast house ID extraction
+
 ### Version 1.0.30 - House ID Sensor Bug Fix
 
 #### Fixed
