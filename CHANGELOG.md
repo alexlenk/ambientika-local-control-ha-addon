@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.34 - House ID Serial Number Fix
+
+#### Fixed
+- UDP broadcasts now correctly identify device serial numbers for house ID tracking
+- Fixed address format mismatch: UDP lookup now uses IP address only (not IP:port)
+- Device house IDs are now properly extracted from UDP broadcasts with correct serial number mapping
+- House ID sensor will show correct values (e.g., 12048) instead of 0 in Home Assistant UI
+
 ### Version 1.0.33 - House ID Publishing Debug
 
 #### Fixed
