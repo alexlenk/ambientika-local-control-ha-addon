@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.29]
+## Version 1.0.29 - House ID Sensor Support
 
 ### Added
 - House ID sensor functionality for all devices
@@ -18,19 +18,19 @@ All notable changes to this project will be documented in this file.
 - Remote socket service triggers device setup events
 - Device mapper includes house ID in broadcast status creation
 
-## [1.0.22]
+## Version 1.0.22 - Changelog Format
 
 ### Fixed
 - **Changelog Format**: Removed incorrect dates from changelog entries
 - Simplified format for better readability and accuracy
 
-## [1.0.21]
+## Version 1.0.21 - Changelog Visibility
 
 ### Fixed
 - **Changelog Visibility**: Added CHANGELOG.md to add-on directory for Home Assistant UI
 - Ensures changelog is properly displayed in Home Assistant add-on store
 
-## [1.0.20]
+## Version 1.0.20 - Preset Mode Sensor
 
 ### Added
 - **New Sensor**: Dedicated preset mode sensor for Home Assistant
@@ -43,7 +43,7 @@ All notable changes to this project will be documented in this file.
 - Enhanced Home Assistant integration with additional sensor entities
 - Improved device visibility for dashboards and automations
 
-## [1.0.19]
+## Version 1.0.19 - Critical Connection Routing Fix
 
 ### Fixed
 - **CRITICAL**: Fixed socket connection routing bug causing devices to become permanently unresponsive
