@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.33 - House ID Publishing Debug
+
+#### Fixed
+- Added detailed logging for house ID sensor MQTT publishing
+- Debug logs show house ID correlation status and MQTT topic publishing
+- Improved troubleshooting for house ID sensors showing 0 in Home Assistant UI
+
 ### Version 1.0.32 - Multi-House Network Support
 
 #### Added
