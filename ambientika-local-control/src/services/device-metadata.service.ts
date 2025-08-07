@@ -81,36 +81,7 @@ export class DeviceMetadataService {
     }
 
     private correlateDeviceWithUdpHouseId(device: Device): void {
-        // Skip if we already have house ID for this device
-        if (this.deviceHouseIds.has(device.serialNumber)) {
-            return;
-        }
-
-        // Store IP to serial mapping for future reference
-        this.ipToSerialMapping.set(device.remoteAddress, device.serialNumber);
-
-        // Try to find house ID from recent UDP broadcasts from the same IP
-        const deviceBaseIp = device.remoteAddress.split(':')[0]; // Extract IP without port
-        const currentTime = Date.now();
-        const maxAge = 30000; // 30 seconds - UDP broadcasts are frequent
-
-        // Look for UDP broadcasts from the same IP (any port)
-        for (const [udpSource, houseIdInfo] of this.udpHouseIds) {
-            const udpIp = udpSource.split(':')[0];
-            
-            // Check if IP matches and broadcast is recent
-            if (udpIp === deviceBaseIp && (currentTime - houseIdInfo.lastSeen) <= maxAge) {
-                this.deviceHouseIds.set(device.serialNumber, houseIdInfo.houseId);
-                this.log.info(`Correlated TCP device ${device.serialNumber} at ${device.remoteAddress} with UDP house ID ${houseIdInfo.houseId} from ${udpSource}`);
-                break;
-            }
-        }
-
-        // Clean up old UDP entries (older than 5 minutes)
-        for (const [udpSource, houseIdInfo] of this.udpHouseIds) {
-            if ((currentTime - houseIdInfo.lastSeen) > 300000) {
-                this.udpHouseIds.delete(udpSource);
-            }
-        }
+        // This method is no longer needed since UDP broadcasts now include serial numbers
+        // House IDs are tracked directly from UDP broadcasts when devices send them
     }
 }

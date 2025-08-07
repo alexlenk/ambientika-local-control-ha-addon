@@ -1,5 +1,20 @@
 # Changelog
 
+### Version 1.0.34 - Remove House ID Feature
+
+#### Removed
+- Removed house ID sensor functionality due to network routing complexity
+- Removed DeviceMetadataService and house ID correlation logic
+- Removed house ID from MQTT topics and Home Assistant auto-discovery
+- Simplified UDP broadcast processing by removing house ID extraction
+
+### Version 1.0.33 - House ID Publishing Debug
+
+#### Fixed
+- Added detailed logging for house ID sensor MQTT publishing
+- Debug logs show house ID correlation status and MQTT topic publishing
+- Improved troubleshooting for house ID sensors showing 0 in Home Assistant UI
+
 ### Version 1.0.32 - Multi-House Network Support
 
 #### Added

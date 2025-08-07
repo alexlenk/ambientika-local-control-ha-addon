@@ -6,7 +6,6 @@ import {RemoteInfo} from 'dgram';
 import {AppEvents} from '../models/enum/app-events.enum';
 import {Device} from '../models/device.model';
 import {DeviceMapper} from './device.mapper';
-import {DeviceMetadataService} from './device-metadata.service';
 
 dotenv.config();
 
@@ -15,12 +14,10 @@ export class UDPBroadcastService {
     private localAddressesSerialNumbers: Map<string, string> = new Map();
     private listener: Map<number, Socket> = new Map();
     private deviceMapper: DeviceMapper;
-    private deviceMetadataService: DeviceMetadataService;
 
     constructor(private log: Logger, private eventService: EventService) {
         this.log.debug('Construct UDPBroadcastService');
         this.deviceMapper = new DeviceMapper(this.log);
-        this.deviceMetadataService = new DeviceMetadataService(this.log, this.eventService);
         this.initialize();
     }
 
@@ -44,13 +41,9 @@ export class UDPBroadcastService {
             this.log.silly(`Received data on udp socket ${listenerPort} for 
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
             const serialNumber = this.localAddressesSerialNumbers.get(remoteInfo.address);
-            const houseId = serialNumber ? this.deviceMetadataService.getDeviceHouseId(serialNumber) : undefined;
-            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber, houseId);
+            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber);
             this.log.silly('Created device status broadcast from data %o', deviceStatus);
-            
-            // Always emit UDP broadcast with source address for house ID correlation
-            const sourceAddress = `${remoteInfo.address}:${remoteInfo.port}`;
-            this.eventService.deviceBroadcastStatus(deviceStatus, sourceAddress);
+            this.eventService.deviceBroadcastStatus(deviceStatus);
         });
 
         socket.on('listening', () => {
@@ -65,11 +58,15 @@ export class UDPBroadcastService {
 
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
-            this.localAddressesSerialNumbers.set(device.remoteAddress, device.serialNumber);
+            // Store by IP address only (without port) to match UDP broadcast source addresses
+            const deviceIp = device.remoteAddress.split(':')[0];
+            this.localAddressesSerialNumbers.set(deviceIp, device.serialNumber);
         });
         this.eventService.on(AppEvents.LOCAL_SOCKET_DISCONNECTED, (localAddress: string) => {
-            if (this.localAddressesSerialNumbers.has(localAddress)) {
-                this.localAddressesSerialNumbers.delete(localAddress);
+            // Convert IP:port to IP for lookup
+            const ip = localAddress.split(':')[0];
+            if (this.localAddressesSerialNumbers.has(ip)) {
+                this.localAddressesSerialNumbers.delete(ip);
             }
         });
     }
