@@ -2,9 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## Version 1.0.29 - House ID Sensor Support
+### Version 1.0.29 - House ID Sensor Support
 
-### Added
+#### Added
 - House ID sensor functionality for all devices
 - DeviceMetadataService for tracking house IDs from multiple sources
 - Device broadcast status model enhanced with house ID field
@@ -12,40 +12,40 @@ All notable changes to this project will be documented in this file.
 - Automatic house ID inference for devices that don't broadcast directly
 - Home Assistant auto-discovery configuration for house ID sensors
 
-### Enhanced
+#### Enhanced
 - MQTT service now publishes house ID sensor data
 - UDP broadcast service passes house ID metadata
 - Remote socket service triggers device setup events
 - Device mapper includes house ID in broadcast status creation
 
-## Version 1.0.22 - Changelog Format
+### Version 1.0.22 - Changelog Format
 
-### Fixed
+#### Fixed
 - **Changelog Format**: Removed incorrect dates from changelog entries
 - Simplified format for better readability and accuracy
 
-## Version 1.0.21 - Changelog Visibility
+### Version 1.0.21 - Changelog Visibility
 
-### Fixed
+#### Fixed
 - **Changelog Visibility**: Added CHANGELOG.md to add-on directory for Home Assistant UI
 - Ensures changelog is properly displayed in Home Assistant add-on store
 
-## Version 1.0.20 - Preset Mode Sensor
+### Version 1.0.20 - Preset Mode Sensor
 
-### Added
+#### Added
 - **New Sensor**: Dedicated preset mode sensor for Home Assistant
   - Creates separate `sensor.<device_serial>_preset_mode` entity for each device
   - Shows current operating mode (SMART, INTAKE, AUTO, AWAY_HOME, etc.)
   - Uses `mdi:tune-variant` icon for clear visual identification
   - Automatically discovered when devices connect
 
-### Changed
+#### Changed
 - Enhanced Home Assistant integration with additional sensor entities
 - Improved device visibility for dashboards and automations
 
-## Version 1.0.19 - Critical Connection Routing Fix
+### Version 1.0.19 - Critical Connection Routing Fix
 
-### Fixed
+#### Fixed
 - **CRITICAL**: Fixed socket connection routing bug causing devices to become permanently unresponsive
   - Commands now route to correct device based on serial number mapping instead of IP address only
   - Prevents MASTER socket from being overwritten when SLAVE device connects from same IP
@@ -55,63 +55,63 @@ All notable changes to this project will be documented in this file.
   - Fixed AUTO->MEDIUM mapping that was creating confusion
   - Added explicit `fan_modes` configuration to prevent non-existent options
 
-### Changed
+#### Changed
 - Improved command routing with IP:port connection keys instead of IP-only mapping
 - Enhanced error handling for invalid fan speed commands
 - Better device connection logging with connection key details
 
-## [1.0.18]
+### Version 1.0.18
 
-### Fixed
+#### Fixed
 - Fixed TypeScript build errors by reverting `trace` back to `silly` log level
 - Winston Logger compatibility: Updated config schema to match Winston levels (silly|debug|info|warn|error)
 
-### Added
+#### Added
 - Deep command analysis for debugging command rejections
 - Enhanced UDP broadcast logging with device roles and coordination details
 - Improved command transmission debugging with hex buffer output
 
-### Changed
+#### Changed
 - Command timeout reduced to 5 seconds for faster failure detection
 - Removed rate limiting as real issue was socket routing bug
 
-## [1.0.17]
+### Version 1.0.17
 
-### Fixed
+#### Fixed
 - **CRITICAL**: Removed fake UI state overrides that masked real device command failures
 - Fixed command persistence logic to show actual device state instead of assumed success
 - Enhanced logging to detect when devices reject operating mode commands
 
-### Added
+#### Added
 - Comprehensive buffer analysis showing byte-by-byte breakdown for debugging
 - Device role information included in status logging
 - UDP coordination patterns visible at silly log level
 
-## [1.0.16]
+### Version 1.0.16
 
-### Fixed
+#### Fixed
 - Fixed Home Assistant add-on README architecture badges showing wrong architectures
 - Updated architecture badges to show only aarch64 and amd64
 - Corrected add-on description text
 
-### Changed
+#### Changed
 - Enhanced log level configuration mapping from HA addon settings to application
 - Improved logging levels and optimized log output
 
-## [1.0.15]
+### Version 1.0.15
 
-### Added
+#### Added
 - Initial deep debugging capabilities for device command analysis
 - Command buffer hex output for protocol debugging
 - Enhanced device status logging with operating modes and fan speeds
 
-### Fixed
+#### Fixed
 - Log level configuration not being passed from Home Assistant add-on settings
 - Various logging improvements for better debugging visibility
 
 ## [Unreleased]
 
-### Planned
+#### Planned
 - Additional protocol analysis features
 - Enhanced error recovery mechanisms
 - Performance optimizations for large deployments
