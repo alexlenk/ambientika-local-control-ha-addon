@@ -121,10 +121,10 @@ export class DeviceMapper {
         const fanMode = FanMode[this.getIntFromBufferSlice(2, 3) >> 4];
         const fanStatus = FanStatus[this.getIntFromBufferSlice(2, 3) & 15];
         
-        // Extract house ID from UDP broadcast buffer (bytes 3-6: uint32LE)
+        // Extract house ID from UDP broadcast buffer (bytes 3-6: uint32BE)
         let extractedHouseId = houseId;
         if (data.length >= 7) {
-            extractedHouseId = this.getUInt32LEFromBufferSlice(3, 7);
+            extractedHouseId = this.getUInt32BEFromBufferSlice(3, 7);
         }
         
         return new DeviceBroadcastStatus(serialNumber, zoneIndex, fanMode, fanStatus, extractedHouseId)
@@ -156,6 +156,16 @@ export class DeviceMapper {
             return slice.readUInt32LE();
         } else {
             this.log.warn(`Could not get uint32le from buffer ${this.buffer} slice ${start},${end} `)
+            return 0;
+        }
+    }
+
+    private getUInt32BEFromBufferSlice(start: number, end: number): number {
+        if (this.buffer.length >= end) {
+            const slice = this.buffer.subarray(start, end)
+            return slice.readUInt32BE();
+        } else {
+            this.log.warn(`Could not get uint32be from buffer ${this.buffer} slice ${start},${end} `)
             return 0;
         }
     }

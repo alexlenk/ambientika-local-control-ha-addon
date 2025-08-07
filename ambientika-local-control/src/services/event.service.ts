@@ -77,9 +77,9 @@ export class EventService extends EventEmitter {
         this.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE, data, localAddress);
     }
 
-    deviceBroadcastStatus(deviceBroadcastStatus: DeviceBroadcastStatus): void {
+    deviceBroadcastStatus(deviceBroadcastStatus: DeviceBroadcastStatus, sourceAddress?: string): void {
         this.log.debug(`Emit event ${AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED}`, deviceBroadcastStatus);
-        this.emit(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED, deviceBroadcastStatus);
+        this.emit(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED, deviceBroadcastStatus, sourceAddress);
     }
 
     deviceSetupUpdate(deviceSetupDto: DeviceSetupDto): void {
