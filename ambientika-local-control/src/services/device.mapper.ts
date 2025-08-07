@@ -120,7 +120,14 @@ export class DeviceMapper {
         const zoneIndex = this.getIntFromBufferSlice(1, 2) & 15;
         const fanMode = FanMode[this.getIntFromBufferSlice(2, 3) >> 4];
         const fanStatus = FanStatus[this.getIntFromBufferSlice(2, 3) & 15];
-        return new DeviceBroadcastStatus(serialNumber, zoneIndex, fanMode, fanStatus, houseId)
+        
+        // Extract house ID from UDP broadcast buffer (bytes 3-6: uint32LE)
+        let extractedHouseId = houseId;
+        if (data.length >= 7) {
+            extractedHouseId = this.getUInt32LEFromBufferSlice(3, 7);
+        }
+        
+        return new DeviceBroadcastStatus(serialNumber, zoneIndex, fanMode, fanStatus, extractedHouseId)
     }
 
     private getHexStringFromBufferSlice(start: number, end: number): string {

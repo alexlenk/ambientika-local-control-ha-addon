@@ -117,6 +117,7 @@ LIGHT_SENSITIVITY_COMMAND_TOPIC=ambientika/%serialNumber/light_sensitivity/set
 WEATHER_UPDATE_TOPIC=ambientika/weather
 DEVICE_SETUP_COMMAND_TOPIC=ambientika/%serialNumber/device_setup/set
 RAW_COMMAND_TOPIC=ambientika/%serialNumber/raw_command/set
+HOUSE_ID_TOPIC=ambientika/%serialNumber/house_id
 EOF
 
 # Log configuration
