@@ -344,14 +344,20 @@ export class MqttService {
 
     private sendDeviceHouseId(device: Device) {
         const houseId = this.deviceMetadataService.getDeviceHouseId(device.serialNumber);
+        const topic = this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber);
+        
+        this.log.debug(`Checking house ID for device ${device.serialNumber}: houseId=${houseId}, topic=${topic}`);
+        
         if (houseId > 0) {
-            this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
-                houseId.toString());
+            this.log.info(`Publishing house ID ${houseId} for device ${device.serialNumber} to topic ${topic}`);
+            this.publish(topic, houseId.toString());
         } else {
             const inferredHouseId = this.deviceMetadataService.inferHouseId(device.serialNumber);
             if (inferredHouseId > 0) {
-                this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
-                    inferredHouseId.toString());
+                this.log.info(`Publishing inferred house ID ${inferredHouseId} for device ${device.serialNumber} to topic ${topic}`);
+                this.publish(topic, inferredHouseId.toString());
+            } else {
+                this.log.warn(`No house ID available for device ${device.serialNumber}, not publishing to ${topic}`);
             }
         }
     }
