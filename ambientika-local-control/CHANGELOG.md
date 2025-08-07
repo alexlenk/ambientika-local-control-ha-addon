@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.30 - House ID Sensor Bug Fix
+
+#### Fixed
+- House ID sensor now correctly displays actual house ID (e.g., 12048) instead of 0
+- Extract house ID directly from UDP broadcast buffer (bytes 3-6 as uint32LE)
+- Added missing HOUSE_ID_TOPIC environment variable for MQTT publishing
+- Fixed changelog formatting with proper header hierarchy (### for versions, #### for subsections)
+
 ### Version 1.0.29 - House ID Sensor Support
 
 #### Added
