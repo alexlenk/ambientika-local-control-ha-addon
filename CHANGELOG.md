@@ -2,13 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-### Version 1.0.34 - House ID Serial Number Fix
+### Version 1.0.35 - Command Queue Implementation
 
 #### Fixed
-- UDP broadcasts now correctly identify device serial numbers for house ID tracking
-- Fixed address format mismatch: UDP lookup now uses IP address only (not IP:port)
-- Device house IDs are now properly extracted from UDP broadcasts with correct serial number mapping
-- House ID sensor will show correct values (e.g., 12048) instead of 0 in Home Assistant UI
+- Fixed issue where only the last command was processed when sending multiple commands rapidly
+- Replaced single command processing with command queue system per device
+- Commands are now queued and processed sequentially instead of being cancelled by newer commands
+- Added detailed logging for command queue status and processing
+
+### Version 1.0.34 - Remove House ID Feature
+
+#### Removed
+- Removed house ID sensor functionality due to network routing complexity
+- Removed DeviceMetadataService and house ID correlation logic
+- Removed house ID from MQTT topics and Home Assistant auto-discovery
+- Simplified UDP broadcast processing by removing house ID extraction
 
 ### Version 1.0.33 - House ID Publishing Debug
 
