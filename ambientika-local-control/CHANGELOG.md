@@ -1,5 +1,13 @@
 # Changelog
 
+### Version 1.0.35 - Command Queue Implementation
+
+#### Fixed
+- Fixed issue where only the last command was processed when sending multiple commands rapidly
+- Replaced single command processing with command queue system per device
+- Commands are now queued and processed sequentially instead of being cancelled by newer commands
+- Added detailed logging for command queue status and processing
+
 ### Version 1.0.34 - Remove House ID Feature
 
 #### Removed

@@ -17,7 +17,8 @@ import {DeviceRole} from '../models/enum/device-role.enum';
 export class DeviceCommandService {
 
     private deviceMapper: DeviceMapper;
-    private pendingCommands: Map<string, { timestamp: number, command: OperatingModeDto, timeoutId: NodeJS.Timeout }> = new Map();
+    private commandQueues: Map<string, Array<{ command: OperatingModeDto, timestamp: number }>> = new Map();
+    private processingCommands: Map<string, { command: OperatingModeDto, timeoutId: NodeJS.Timeout }> = new Map();
     private readonly COMMAND_TIMEOUT_MS = 5000; // 5 seconds timeout for device response
 
     constructor(private log: Logger,
@@ -56,19 +57,51 @@ export class DeviceCommandService {
     }
 
     private handleDeviceStatusUpdate(device: Device): void {
-        const pending = this.pendingCommands.get(device.serialNumber);
-        if (pending) {
+        const processing = this.processingCommands.get(device.serialNumber);
+        if (processing) {
             this.log.info(`✅ Device ${device.serialNumber} responded - clearing timeout`);
-            clearTimeout(pending.timeoutId);
-            this.pendingCommands.delete(device.serialNumber);
+            clearTimeout(processing.timeoutId);
+            this.processingCommands.delete(device.serialNumber);
+            
+            // Process next command in queue if available
+            this.processNextCommand(device.serialNumber);
         }
     }
 
     private handleOperatingModeUpdate(opMode: OperatingModeDto, serialNumber: string): void {
         const now = Date.now();
         
-        this.log.info(`=== DEEP COMMAND ANALYSIS for ${serialNumber} ===`);
-        this.log.info(`Command: ${JSON.stringify(opMode)}`);
+        // Add command to queue
+        if (!this.commandQueues.has(serialNumber)) {
+            this.commandQueues.set(serialNumber, []);
+        }
+        
+        const queue = this.commandQueues.get(serialNumber)!;
+        queue.push({ command: opMode, timestamp: now });
+        
+        this.log.info(`📥 Queued command for ${serialNumber}: ${JSON.stringify(opMode)} (queue length: ${queue.length})`);
+        
+        // Start processing if not already processing a command for this device
+        if (!this.processingCommands.has(serialNumber)) {
+            this.processNextCommand(serialNumber);
+        }
+    }
+
+    private processNextCommand(serialNumber: string): void {
+        const queue = this.commandQueues.get(serialNumber);
+        if (!queue || queue.length === 0) {
+            return; // No commands to process
+        }
+
+        // Don't start new command if already processing one
+        if (this.processingCommands.has(serialNumber)) {
+            return;
+        }
+
+        const next = queue.shift()!; // Remove first command from queue
+        const opMode = next.command;
+        
+        this.log.info(`🚀 Processing command for ${serialNumber}: ${JSON.stringify(opMode)} (remaining: ${queue.length})`);
         
         this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
             (dto: DeviceDto | undefined) => {
@@ -80,24 +113,24 @@ export class DeviceCommandService {
                     this.log.info(`Generated command buffer: ${data.toString('hex')}`);
                     this.analyzeCommandBuffer(data, opMode, device);
                     
-                    // Clear any existing timeout for this device
-                    const existingPending = this.pendingCommands.get(serialNumber);
-                    if (existingPending) {
-                        clearTimeout(existingPending.timeoutId);
-                    }
-                    
                     // Setup timeout for device response
                     const timeoutId = setTimeout(() => {
                         this.log.error(`❌ Device ${serialNumber} did not respond within ${this.COMMAND_TIMEOUT_MS}ms`);
                         this.log.error(`❌ Command that timed out: ${JSON.stringify(opMode)}`);
                         this.log.error(`❌ Device may be unresponsive - check socket connection`);
-                        this.pendingCommands.delete(serialNumber);
+                        this.processingCommands.delete(serialNumber);
+                        // Process next command in queue if available
+                        this.processNextCommand(serialNumber);
                     }, this.COMMAND_TIMEOUT_MS);
                     
-                    this.pendingCommands.set(serialNumber, { timestamp: now, command: opMode, timeoutId });
+                    this.processingCommands.set(serialNumber, { command: opMode, timeoutId });
                     this.log.info(`⏱️  Command timeout set for ${this.COMMAND_TIMEOUT_MS}ms`);
                     
                     this.localSocketDataUpdate(data, device.remoteAddress);
+                } else {
+                    this.log.error(`❌ Device ${serialNumber} not found in database, cannot process command`);
+                    // Process next command if device not found
+                    this.processNextCommand(serialNumber);
                 }
             });
     }
