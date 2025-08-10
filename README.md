@@ -97,6 +97,37 @@ Download a BLE app:
 
 Configure the add-on through the Home Assistant UI with your MQTT broker settings and device network information.
 
+## Raw Command Programming
+
+For advanced device programming and protocol testing, you can send raw hex commands directly to devices via MQTT.
+
+### Raw Command Topic
+```
+ambientika/{serialNumber}/raw_command/set
+```
+
+### Usage Example
+To send a raw command to device `1234567890ab`, publish a hex string to:
+```
+Topic: ambientika/1234567890ab/raw_command/set
+Payload: 02001234567890ab01010901
+```
+
+### Command Format
+- Commands should be sent as hex strings (without spaces or `0x` prefix)
+- The system will convert hex strings to binary before sending to devices
+- Invalid hex characters will be rejected with error logging
+- Commands are processed through the same queue system as regular device commands
+
+### Debugging
+Raw commands include detailed byte-by-byte analysis in the logs when sent, showing:
+- Buffer length and hex representation
+- Individual byte breakdown
+- Possible serial number extraction
+- Command structure analysis
+
+This feature is primarily intended for protocol development and advanced device configuration.
+
 ## Supported Devices
 
 This add-on works with Ambientika air purification/ventilation devices that support local network control.
