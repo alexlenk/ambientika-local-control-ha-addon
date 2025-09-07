@@ -116,6 +116,7 @@ LIGHT_SENSITIVITY_TOPIC=ambientika/%serialNumber/light_sensitivity
 LIGHT_SENSITIVITY_COMMAND_TOPIC=ambientika/%serialNumber/light_sensitivity/set
 WEATHER_UPDATE_TOPIC=ambientika/weather
 DEVICE_SETUP_COMMAND_TOPIC=ambientika/%serialNumber/device_setup/set
+DEVICE_SETUP_JSON_TOPIC=ambientika/%serialNumber/setup/set
 RAW_COMMAND_TOPIC=ambientika/%serialNumber/raw_command/set
 EOF
 

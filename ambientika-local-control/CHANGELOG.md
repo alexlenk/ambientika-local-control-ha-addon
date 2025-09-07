@@ -1,5 +1,46 @@
 # Changelog
 
+### Version 1.0.37 - JSON Device Setup Commands
+
+#### Added
+- **JSON-based device setup commands** via MQTT topic `ambientika/{serialNumber}/setup/set`
+- Human-readable device role names: `MASTER`, `SLAVE_EQUAL_MASTER`, `SLAVE_OPPOSITE_MASTER`
+- Automatic serial number extraction from MQTT topic (eliminates redundancy)
+- Input validation for device roles, zone, and house ID parameters
+- Comprehensive documentation with device role explanations and usage examples
+
+#### Enhanced
+- **Improved UX** for device configuration - use JSON instead of raw hex commands
+- **Type-safe implementation** with TypeScript interfaces and validation
+- **Better error handling** with descriptive error messages for invalid inputs
+- **Automatic binary command generation** with proper little-endian encoding
+
+#### Technical Details
+- New `DeviceSetupJsonDto` interface for type-safe JSON parsing
+- Enhanced MQTT service with `handleDeviceSetupJson` method
+- Added `DEVICE_SETUP_JSON_TOPIC` environment variable
+- Maintains full backward compatibility with existing raw command system
+
+#### Example Usage
+```
+Topic: ambientika/1234567890ab/setup/set
+Payload: {"role": "SLAVE_OPPOSITE_MASTER", "zone": 2, "houseId": 12048}
+```
+
+### Version 1.0.36 - Device Role Parsing Fix
+
+#### Fixed
+- Fixed device role parsing when devices report unknown/undefined role values
+- Added fallback to MASTER role when device role cannot be determined from buffer
+- Prevents NOT NULL constraint failures in database when saving devices with unknown roles
+- Fixes raw command execution failures caused by devices not being saved to database
+- Added warning logging for unknown device role values to aid in debugging
+
+#### Technical Details
+- Enhanced `deviceFromSocketBuffer` and `deviceSetupFromSocketBuffer` methods in device mapper
+- Applied fix to both device status parsing and device setup parsing
+- Maintains backward compatibility while improving robustness for new device types
+
 ### Version 1.0.35 - Command Queue Implementation
 
 #### Fixed
