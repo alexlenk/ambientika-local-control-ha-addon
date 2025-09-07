@@ -128,6 +128,47 @@ Raw commands include detailed byte-by-byte analysis in the logs when sent, showi
 
 This feature is primarily intended for protocol development and advanced device configuration.
 
+## Device Setup Commands
+
+For easier device configuration, you can use the JSON-based setup command instead of raw hex commands.
+
+### JSON Setup Command Topic
+```
+ambientika/{serialNumber}/setup/set
+```
+
+### Usage Example
+To configure device `1234567890ab` as a slave device in zone 2:
+```
+Topic: ambientika/1234567890ab/setup/set
+Payload: {"role": "SLAVE_OPPOSITE_MASTER", "zone": 2, "houseId": 12048}
+```
+
+### Device Roles
+- **`MASTER`** (0) - Primary device that controls ventilation flow
+- **`SLAVE_EQUAL_MASTER`** (1) - Secondary device with equal airflow as master
+- **`SLAVE_OPPOSITE_MASTER`** (2) - Secondary device with opposite airflow to master
+
+### JSON Format
+```json
+{
+  "role": "MASTER" | "SLAVE_EQUAL_MASTER" | "SLAVE_OPPOSITE_MASTER",
+  "zone": number,      // Zone index (0-255)
+  "houseId": number    // House ID for device grouping
+}
+```
+
+### Command Generation
+The JSON setup command automatically:
+- Extracts the serial number from the MQTT topic
+- Validates the device role and parameters
+- Generates the proper binary command with little-endian encoding
+- Sends the command through the existing device communication system
+
+**Example Binary Output:**
+- JSON: `{"role": "SLAVE_OPPOSITE_MASTER", "zone": 2, "houseId": 12048}`
+- Generated hex: `02001234567890ab00020200102f0000`
+
 ## Supported Devices
 
 This add-on works with Ambientika air purification/ventilation devices that support local network control.

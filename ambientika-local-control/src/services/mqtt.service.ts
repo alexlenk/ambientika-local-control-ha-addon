@@ -18,6 +18,12 @@ import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
 
 dotenv.config()
 
+interface DeviceSetupJsonDto {
+    role: 'MASTER' | 'SLAVE_EQUAL_MASTER' | 'SLAVE_OPPOSITE_MASTER';
+    zone: number;
+    houseId: number;
+}
+
 export class MqttService {
 
     private mqttConnectionString = process.env.MQTT_CONNECTION_STRING || 'localhost';
@@ -388,6 +394,7 @@ export class MqttService {
         topics.push((process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.FILTER_RESET_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        topics.push((process.env.DEVICE_SETUP_JSON_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
@@ -490,6 +497,38 @@ export class MqttService {
         }
     }
 
+    private handleDeviceSetupJson(serialNumber: string, message: Buffer): void {
+        try {
+            const jsonSetup = JSON.parse(message.toString()) as DeviceSetupJsonDto;
+            
+            // Validate required fields
+            if (!jsonSetup.role || jsonSetup.zone === undefined || jsonSetup.houseId === undefined) {
+                this.log.error(`Invalid JSON setup for ${serialNumber}: missing required fields (role, zone, houseId)`);
+                return;
+            }
+            
+            // Validate role
+            const validRoles = ['MASTER', 'SLAVE_EQUAL_MASTER', 'SLAVE_OPPOSITE_MASTER'];
+            if (!validRoles.includes(jsonSetup.role)) {
+                this.log.error(`Invalid device role '${jsonSetup.role}' for ${serialNumber}. Valid roles: ${validRoles.join(', ')}`);
+                return;
+            }
+            
+            // Convert to DeviceSetupDto format
+            const deviceSetupDto: DeviceSetupDto = {
+                serialNumber: serialNumber,
+                deviceRole: jsonSetup.role,
+                zoneIndex: jsonSetup.zone,
+                houseId: jsonSetup.houseId
+            };
+            
+            this.log.info(`JSON device setup received for ${serialNumber}: role=${jsonSetup.role}, zone=${jsonSetup.zone}, houseId=${jsonSetup.houseId}`);
+            this.eventService.deviceSetupUpdate(deviceSetupDto);
+        } catch (error) {
+            this.log.error(`Failed to parse JSON device setup message for ${serialNumber}: ${error}`);
+        }
+    }
+
     private handleRawCommand(serialNumber: string, message: Buffer): void {
         try {
             const hexString = message.toString().trim();
@@ -584,6 +623,8 @@ export class MqttService {
                 this.handleFilterReset(serialNumber);
             } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.DEVICE_SETUP_COMMAND_TOPIC) {
                 this.handleDeviceSetup(serialNumber, message);
+            } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.DEVICE_SETUP_JSON_TOPIC) {
+                this.handleDeviceSetupJson(serialNumber, message);
             } else if (topic.replace(/[a-f0-9]{12}/, '%serialNumber') === process.env.RAW_COMMAND_TOPIC) {
                 this.handleRawCommand(serialNumber, message);
             } else {
