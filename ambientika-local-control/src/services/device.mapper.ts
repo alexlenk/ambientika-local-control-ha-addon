@@ -42,6 +42,10 @@ export class DeviceMapper {
         const nightAlarm = this.getBooleanFromBufferSlice(16, 17);
         const deviceRoleValue = this.getIntFromBufferSlice(17, 18);
         const deviceRole = DeviceRole[deviceRoleValue];
+        if (deviceRole === undefined) {
+            this.log.warn(`Unknown device role value ${deviceRoleValue} for device ${serialNumber}, using MASTER fallback`);
+        }
+        const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
         const lastOperatingMode = OperatingMode[this.getIntFromBufferSlice(18, 19)];
         const lightSensitivity = LightSensitivity[this.getIntFromBufferSlice(19, 20)];
         const signalStrength = this.getIntFromBufferSlice(20, 21);
@@ -56,7 +60,7 @@ export class DeviceMapper {
             humidityAlarm,
             filterStatus,
             nightAlarm,
-            deviceRole,
+            finalDeviceRole,
             lastOperatingMode,
             lightSensitivity,
             remoteAddress,
@@ -83,10 +87,15 @@ export class DeviceMapper {
     deviceSetupFromSocketBuffer(data: Buffer): DeviceSetup {
         this.buffer = data;
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
-        const deviceRole = DeviceRole[this.getIntFromBufferSlice(9, 10)];
+        const deviceRoleValue = this.getIntFromBufferSlice(9, 10);
+        const deviceRole = DeviceRole[deviceRoleValue];
+        if (deviceRole === undefined) {
+            this.log.warn(`Unknown device role value ${deviceRoleValue} in setup, using MASTER fallback`);
+        }
+        const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
         const zoneIndex = this.getIntFromBufferSlice(10, 11);
         const houseId = this.getUInt32LEFromBufferSlice(11, 15);
-        return new DeviceSetup(serialNumber, deviceRole, zoneIndex, houseId);
+        return new DeviceSetup(serialNumber, finalDeviceRole, zoneIndex, houseId);
     }
 
     deviceFilterResetFromSocketBuffer(data: Buffer): DeviceFilterReset {
