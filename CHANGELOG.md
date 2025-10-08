@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.39 - Improved Warning Logs
+
+#### Enhanced
+- **Warning Visibility**: Fan speed warning logs now include device serial number for better troubleshooting
+- Invalid fan speed warnings now show specific device ID instead of generic message
+- Improved debugging capabilities for devices sending unexpected fan speed values
+
+#### Fixed
+- Enhanced error message clarity for invalid fan speed values from devices
+- Better device identification in warning logs for tracking problematic devices
+
 ### Version 1.0.35 - Command Queue Implementation
 
 #### Fixed
