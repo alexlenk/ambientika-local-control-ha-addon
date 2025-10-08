@@ -45,6 +45,17 @@ export class RemoteSocketService {
             this.eventService.remoteSocketDisconnected(localAddress);
             this.clients.delete(localAddress);
         });
+        remoteSocket.on('error', (error: Error) => {
+            this.log.warn(`Remote socket error for ${localAddress}: ${error.message}`);
+            this.eventService.remoteSocketDisconnected(localAddress);
+            this.clients.delete(localAddress);
+            
+            // Close the socket if it's still open
+            if (!remoteSocket.destroyed) {
+                remoteSocket.destroy();
+            }
+        });
+
         remoteSocket.on('data', (data: Buffer) => {
             this.log.silly(`Received data on remote socket for ${localAddress} %o`, data);
             this.eventService.remoteSocketDataUpdateReceived(data, localAddress);

@@ -59,6 +59,30 @@ export class LocalSocketService {
             }
         });
 
+        serverSocket.on('error', (error: Error) => {
+            const connectionKey = serverSocket.remoteAddress && serverSocket.remotePort 
+                ? `${serverSocket.remoteAddress}:${serverSocket.remotePort}` 
+                : 'unknown';
+            this.log.warn(`Socket error for connection ${connectionKey}: ${error.message}`);
+            
+            // Clean up on error
+            if (serverSocket.remoteAddress && serverSocket.remotePort) {
+                const connKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
+                for (const [serialNumber, mappedConnKey] of this.deviceConnections.entries()) {
+                    if (mappedConnKey === connKey) {
+                        this.deviceConnections.delete(serialNumber);
+                        this.log.debug(`Cleaned up device mapping for ${serialNumber} due to socket error`);
+                    }
+                }
+                this.clients.delete(connKey);
+            }
+            
+            // Close the socket if it's still open
+            if (!serverSocket.destroyed) {
+                serverSocket.destroy();
+            }
+        });
+
         serverSocket.on('data', (data: Buffer) => {
             this.log.silly('Received data on local socket %o', data);
             if (serverSocket.remoteAddress) {
