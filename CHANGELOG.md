@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.41 - TypeScript Build Fix
+
+#### Fixed
+- **Build Error**: Fixed TypeScript compilation errors for Error.code property access
+- Proper type casting for socket error codes in error handlers
+- Resolved Docker build failures caused by TypeScript strict typing
+
 ### Version 1.0.40 - Critical Socket Error Handling Fix
 
 #### Fixed
