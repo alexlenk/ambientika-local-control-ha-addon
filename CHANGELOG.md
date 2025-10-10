@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.0.40 - Critical Socket Error Handling Fix
+
+#### Fixed
+- **CRITICAL**: Fixed overly aggressive socket error handling that was causing devices to go offline
+- Socket connections are now only terminated for fatal errors (ECONNRESET, EPIPE, ENOTCONN, ECONNREFUSED)
+- Transient socket errors no longer disconnect working devices
+- Improved connection stability for devices experiencing temporary network issues
+
 ### Version 1.0.39 - Improved Warning Logs
 
 #### Enhanced
