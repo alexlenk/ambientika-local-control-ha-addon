@@ -47,12 +47,16 @@ export class RemoteSocketService {
         });
         remoteSocket.on('error', (error: Error) => {
             this.log.warn(`Remote socket error for ${localAddress}: ${error.message}`);
-            this.eventService.remoteSocketDisconnected(localAddress);
-            this.clients.delete(localAddress);
             
-            // Close the socket if it's still open
-            if (!remoteSocket.destroyed) {
-                remoteSocket.destroy();
+            // Only clean up for fatal errors, not transient ones
+            if (error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.code === 'ENOTCONN' || error.code === 'ECONNREFUSED') {
+                this.eventService.remoteSocketDisconnected(localAddress);
+                this.clients.delete(localAddress);
+                
+                // Only destroy socket for fatal connection errors
+                if (!remoteSocket.destroyed) {
+                    remoteSocket.destroy();
+                }
             }
         });
 

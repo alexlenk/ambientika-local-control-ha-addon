@@ -65,21 +65,23 @@ export class LocalSocketService {
                 : 'unknown';
             this.log.warn(`Socket error for connection ${connectionKey}: ${error.message}`);
             
-            // Clean up on error
-            if (serverSocket.remoteAddress && serverSocket.remotePort) {
-                const connKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
-                for (const [serialNumber, mappedConnKey] of this.deviceConnections.entries()) {
-                    if (mappedConnKey === connKey) {
-                        this.deviceConnections.delete(serialNumber);
-                        this.log.debug(`Cleaned up device mapping for ${serialNumber} due to socket error`);
+            // Only clean up for fatal errors, not transient ones
+            if (error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.code === 'ENOTCONN') {
+                if (serverSocket.remoteAddress && serverSocket.remotePort) {
+                    const connKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
+                    for (const [serialNumber, mappedConnKey] of this.deviceConnections.entries()) {
+                        if (mappedConnKey === connKey) {
+                            this.deviceConnections.delete(serialNumber);
+                            this.log.debug(`Cleaned up device mapping for ${serialNumber} due to connection error`);
+                        }
                     }
+                    this.clients.delete(connKey);
                 }
-                this.clients.delete(connKey);
-            }
-            
-            // Close the socket if it's still open
-            if (!serverSocket.destroyed) {
-                serverSocket.destroy();
+                
+                // Only destroy socket for fatal connection errors
+                if (!serverSocket.destroyed) {
+                    serverSocket.destroy();
+                }
             }
         });
 
