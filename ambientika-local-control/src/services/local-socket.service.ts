@@ -66,7 +66,8 @@ export class LocalSocketService {
             this.log.warn(`Socket error for connection ${connectionKey}: ${error.message}`);
             
             // Only clean up for fatal errors, not transient ones
-            if (error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.code === 'ENOTCONN') {
+            const errorCode = (error as any).code;
+            if (errorCode === 'ECONNRESET' || errorCode === 'EPIPE' || errorCode === 'ENOTCONN') {
                 if (serverSocket.remoteAddress && serverSocket.remotePort) {
                     const connKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
                     for (const [serialNumber, mappedConnKey] of this.deviceConnections.entries()) {
