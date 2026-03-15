@@ -91,10 +91,10 @@ describe('HAAutoDiscoveryService', () => {
             expect(msg.modes).toEqual(['off', 'fan_only']);
         });
 
-        it('fan_modes is ["low", "medium", "high"]', () => {
+        it('fan_modes is ["low", "medium", "high", "night"]', () => {
             const device = makeDevice();
             const msg = JSON.parse(service.getClimateDeviceDiscoveryMessage(device));
-            expect(msg.fan_modes).toEqual(['low', 'medium', 'high']);
+            expect(msg.fan_modes).toEqual(['low', 'medium', 'high', 'night']);
         });
 
         it('topics are interpolated with serialNumber', () => {

@@ -49,7 +49,7 @@ export class HAAutoDiscoveryService {
                 device.serialNumber),
             preset_modes: (process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES?.split(',') || []),
             modes: ['off', 'fan_only'],
-            fan_modes: ['low', 'medium', 'high']
+            fan_modes: ['low', 'medium', 'high', 'night']
         } as HaAutoDiscoverClimateInterface;
 
         return JSON.stringify(climateDeviceDiscovery);
