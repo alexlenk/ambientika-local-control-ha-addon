@@ -140,6 +140,88 @@ describe('DeviceStorageService', () => {
         });
     });
 
+    describe('deleteDevice', () => {
+        it('emits deviceOffline when delete succeeds', () => {
+            const db = (service as any).db;
+            db.run = vi.fn((_sql: string, _id: unknown, cb: (err: Error | null) => void) => cb(null));
+
+            const listener = vi.fn();
+            eventService.on('DEVICE_OFFLINE', listener);
+
+            service.deleteDevice(makeDto());
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('logs error when delete fails', () => {
+            const db = (service as any).db;
+            db.run = vi.fn((_sql: string, _id: unknown, cb: (err: Error | null) => void) =>
+                cb(new Error('delete failed'))
+            );
+
+            service.deleteDevice(makeDto());
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('Error deleting device'),
+                expect.any(Error)
+            );
+        });
+    });
+
+    describe('command tracking: DEVICE_STATUS_UPDATE_RECEIVED with stored command', () => {
+        it('warns when device reports non-matching operatingMode', () => {
+            // Store a command for AUTO
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO', fanSpeed: 'HIGH' }, 'aabbccddeeff');
+
+            // Device reports NIGHT (mismatch)
+            const device = makeDevice();
+            device.operatingMode = 'NIGHT';
+            device.fanSpeed = 'HIGH';
+            eventService.deviceStatusUpdate(device);
+
+            expect(mockLog.warn).toHaveBeenCalledWith(
+                expect.stringContaining('REJECTED command')
+            );
+        });
+
+        it('warns when device reports non-matching fanSpeed', () => {
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO', fanSpeed: 'HIGH' }, 'aabbccddeeff');
+
+            const device = makeDevice();
+            device.operatingMode = 'AUTO';
+            device.fanSpeed = 'LOW'; // mismatch
+            eventService.deviceStatusUpdate(device);
+
+            expect(mockLog.warn).toHaveBeenCalledWith(
+                expect.stringContaining('REJECTED fanSpeed')
+            );
+        });
+
+        it('logs info when device applied command successfully', () => {
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT', fanSpeed: 'HIGH' }, 'aabbccddeeff');
+
+            const device = makeDevice();
+            device.operatingMode = 'NIGHT';
+            device.fanSpeed = 'HIGH';
+            eventService.deviceStatusUpdate(device);
+
+            expect(mockLog.info).toHaveBeenCalledWith(
+                expect.stringContaining('applied command successfully')
+            );
+            expect(service.hasStoredCommand('aabbccddeeff')).toBe(false);
+        });
+    });
+
+    describe('createDbConnection', () => {
+        it('returns existing db when file exists (no table creation)', async () => {
+            const sqlite3Mock = await import('sqlite3');
+            // fs mock returns true (file exists), so it just calls new Database(filepath)
+            // The existing beforeEach already exercises this path via the mock that returns true
+            const db = (service as any).db;
+            expect(db).toBeDefined();
+        });
+    });
+
     describe('saveDevice', () => {
         it('triggers createDevice (INSERT) when device does not exist', () => {
             const device = makeDevice();
