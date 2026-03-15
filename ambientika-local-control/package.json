@@ -6,7 +6,10 @@
     "dev": "ts-node-dev --poll ./src/index.ts",
     "build": "rimraf ./dist && tsc",
     "start": "npm run build && node dist/index.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "Alex Lenk",
   "contributors": [
@@ -33,12 +36,15 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.5.4",
     "@types/node-schedule": "^2.1.7",
+    "@types/supertest": "^6.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
     "eslint": "^9.10.0",
     "globals": "^15.9.0",
     "rimraf": "^6.0.1",
-    "sequelize": "^6.37.3",
+    "supertest": "^7.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.5.0"
+    "typescript-eslint": "^8.5.0",
+    "vitest": "^2.0.0"
   }
 }
