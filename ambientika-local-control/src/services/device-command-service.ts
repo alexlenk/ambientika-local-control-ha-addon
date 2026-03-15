@@ -143,7 +143,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars?.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
 
@@ -256,7 +256,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
         }
@@ -286,7 +286,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
         }
