@@ -1,5 +1,8 @@
 # Ambientika Local Control - Home Assistant Add-on
 
+[![Build](https://github.com/alexlenk/ambientika-local-control-ha-addon/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/alexlenk/ambientika-local-control-ha-addon/actions/workflows/build.yml)
+![Tests](https://img.shields.io/badge/tests-185%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
 
