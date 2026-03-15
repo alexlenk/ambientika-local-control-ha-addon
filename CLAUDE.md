@@ -1,61 +1,133 @@
-# Project Context
+# CLAUDE.md
 
-## Working Conventions
-- Always work on the `dev` branch, never commit directly to `master`
-- Commit after each logical unit (one bug fix, one test file, one config change — not batches)
-- Commit messages explain *why*, not just *what*
-- Push to dev branch regularly
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Pre-Push Checklist
+## Repository layout
 
-Run these steps in order before every push:
+```
+ambientika-local-control/   ← the add-on (Node.js/TypeScript)
+  src/
+    index.ts                ← entry point, wires all services together
+    services/               ← all business logic
+    models/                 ← Device model + all enums
+    models/enum/            ← protocol enums (see below)
+    dto/                    ← plain data-transfer objects (excluded from coverage)
+    scripts/                ← one-off BLE provisioning tool (excluded from coverage)
+  src/__tests__/            ← Vitest tests (excluded from tsc build)
+  Dockerfile                ← multi-stage: build+prune → production COPY
+  config.yaml               ← HA add-on manifest; version field is the single source of truth
+.github/workflows/
+  build.yml                 ← test → docker build/push (triggers on push/PR/tag)
+  release.yml               ← auto-release on master merge when config.yaml changes
+```
 
-1. **Tests** — all 185 tests must pass:
-   ```bash
-   cd ambientika-local-control && npm test
-   ```
+## Common commands
 
-2. **Coverage** — must meet ≥80% lines/functions/branches:
-   ```bash
-   npm run test:coverage
-   ```
+All commands run from `ambientika-local-control/`:
 
-3. **TypeScript build** — must compile clean (test files are excluded via `tsconfig.json`):
-   ```bash
-   npm run build
-   ```
+```bash
+npm test                        # run all tests once
+npm run test:watch              # watch mode
+npm run test:coverage           # run with coverage report (must meet ≥80%)
+npm run build                   # tsc compile to dist/ (test files excluded)
 
-4. **arm64 image build** — validates Dockerfile and native sqlite3 compilation (use Finch):
-   ```bash
-   finch build --platform linux/arm64 -t ambientika-local:arm64-test ./ambientika-local-control/
-   finch run --rm ambientika-local:arm64-test node -e "const s = require('sqlite3'); console.log('sqlite3 ok', s.VERSION)"
-   ```
-   Steps 4 is mandatory when touching `Dockerfile`, `package.json`, or any native dependency.
+# Run a single test file
+npx vitest run src/__tests__/service/mqtt.service.test.ts
 
-## Test Infrastructure
+# Run tests matching a description
+npx vitest run -t "fan speed"
+```
 
-**Framework:** Vitest + `@vitest/coverage-v8`. Config: `ambientika-local-control/vitest.config.ts`.
-**Scripts:** `npm test`, `npm run test:watch`, `npm run test:coverage`
-**Coverage thresholds:** ≥80% lines / functions / branches
-**Excluded from coverage:** `src/dto/**`, `src/scripts/**`, `src/**/*.interface.ts`, `src/services/logger.service.ts`
+Local arm64 image test (only needed when touching Dockerfile, package.json, or native deps):
+```bash
+finch build --platform linux/arm64 -t ambientika-test ./ambientika-local-control/
+finch run --rm ambientika-test node -e "require('sqlite3'); console.log('ok')"
+```
 
-12 test files across 3 layers (all I/O mocked — no native compilation needed):
+## Architecture
 
-| Layer | Files |
-|-------|-------|
-| Unit | `device.mapper`, `event.service`, `device-command-buffers` |
-| Service | `device-storage`, `device-command`, `rest`, `scheduler`, `mqtt`, `ha-auto-discovery` |
-| Integration | `local-socket`, `remote-socket`, `udp-broadcast` |
+All services are instantiated once in `index.ts` and communicate exclusively through `EventService` (an `EventEmitter` subclass). No service holds a direct reference to another service except `DeviceStorageService` and `EventService`, which are injected into most services.
 
-Key mocking patterns:
-- `vi.mock('sqlite3')` — avoids native compilation in tests
+### Data flow
+
+```
+Ambientika devices (TCP port 11000)
+    ↓
+LocalSocketService          — receives 21-byte status packets from devices
+    ↓ DEVICE_STATUS_UPDATE_RECEIVED
+DeviceStorageService        — persists device state to SQLite (devices.db)
+DeviceCommandService        — manages per-device command queue with 5s timeout
+MqttService                 — publishes state to MQTT, subscribes to HA commands
+    ↓ (HA sends command)
+MqttService → DEVICE_OPERATING_MODE_UPDATE
+    ↓
+DeviceCommandService        — builds 13-byte command buffer, sends via LOCAL_SOCKET_DATA_UPDATE
+    ↓
+LocalSocketService          — writes buffer to the device TCP socket
+
+UDPBroadcastService         — listens on UDP ports 45000+ for broadcast status packets
+RemoteSocketService         — optional cloud relay (when cloud_sync_enabled=true)
+SchedulerService            — marks stale devices offline every minute
+```
+
+### Key event names (AppEvents enum)
+
+| Event | Direction | Meaning |
+|-------|-----------|---------|
+| `DEVICE_STATUS_UPDATE_RECEIVED` | LocalSocket → all | Device sent a 21-byte status packet |
+| `LOCAL_SOCKET_DATA_UPDATE` | Command/MQTT → LocalSocket | Write bytes to device socket |
+| `DEVICE_OPERATING_MODE_UPDATE` | MQTT → DeviceCommand | HA sent a command |
+| `DEVICE_OFFLINE` | Scheduler → MQTT/Storage | Device went stale |
+| `DEVICE_BROADCAST_STATUS_RECEIVED` | UDP → MQTT | UDP fan status broadcast |
+| `REMOTE_SOCKET_CONNECTED/DISCONNECTED` | Remote → MQTT | Cloud relay status |
+
+### Protocol
+
+Devices speak a binary TCP protocol. Key packet sizes:
+- **21 bytes** — device status (parsed by `DeviceMapper.deviceFromSocketBuffer`)
+- **18 bytes** — device info / firmware versions
+- **15 bytes** — device setup (role, zone, houseId)
+- **13 bytes** — operating mode command sent to device
+- **9 bytes** — filter reset command
+
+Byte layout and enum values are documented in `src/models/enum/` JSDoc and in the README Protocol Reference section. All enum values were reverse-engineered and cross-referenced against the official Ambientika Smart APP manual (P06506000, EN October 2023).
+
+### Protocol enums
+
+- `OperatingMode` — 12 modes (0=SMART … 11=OFF). SMART auto-triggers MASTER_SLAVE_FLOW free-cooling.
+- `FanSpeed` — 4 speeds: LOW=0, MEDIUM=1, HIGH=2, NIGHT=3 (night-time speed, set automatically).
+- `DeviceRole` — MASTER=0, SLAVE_EQUAL_MASTER=1, SLAVE_OPPOSITE_MASTER=2. **Commands always go to MASTER only.**
+- `HumidityLevel` — DRY=0 (40%), NORMAL=1 (60%), MOIST=2 (75%).
+
+## Working conventions
+
+- Always work on the `dev` branch; never commit directly to `master`.
+- Commit after each logical unit; commit messages explain *why*, not just *what*.
+- `config.yaml` version is the single source of truth — `package.json` has no version field intentionally.
+
+## Release process
+
+1. Bump `version` in `ambientika-local-control/config.yaml`
+2. Commit to `dev` branch, push, open PR
+3. Merge PR to `master`
+4. `release.yml` fires automatically: reads version, creates tag `vX.Y.Z`, creates GitHub Release
+5. `build.yml` triggers on the new tag: runs tests, builds and pushes Docker images for `amd64` + `aarch64`
+
+## Test infrastructure
+
+**Framework:** Vitest + `@vitest/coverage-v8`. Current coverage: ~93%.
+
+Key mocking patterns used across the test suite:
+- `vi.mock('sqlite3')` — prevents native compilation
 - `vi.mock('node:net')` / `vi.mock('node:dgram')` — socket services
-- `vi.mock('mqtt')` with captured `mqttEventHandlers` map — MQTT service
-- `vi.useFakeTimers()` — command timeout tests in device-command.service.test.ts
-- Private methods tested via `(service as any).methodName()`
+- `vi.mock('mqtt')` with captured `mqttEventHandlers` map — MQTT client events
+- `vi.useFakeTimers()` — 5-second command timeout in `device-command.service.test.ts`
+- Private methods accessed via `(service as any).methodName()`
+
+Coverage excludes: `src/dto/**`, `src/scripts/**`, `src/**/*.interface.ts`, `src/services/logger.service.ts`, `src/models/device-status.model.ts`.
 
 ## CI/CD
 
-- **Test job** on `ubuntu-latest` (x86, no QEMU) gates all Docker builds via `needs: test`
-- **arm64 Docker build** uses native `ubuntu-24.04-arm` runner — no QEMU, sqlite3 compiles fast
-- **Dockerfile** compiles sqlite3 once in the `build` stage, prunes devDeps, then `COPY --from=build` into production — no second compilation
+- **Test job** on `ubuntu-latest` (x86, no QEMU, mocked sqlite3) gates all Docker builds via `needs: test`
+- **arm64 Docker build** uses native `ubuntu-24.04-arm` runner — no QEMU
+- **Dockerfile** compiles sqlite3 once in `build` stage, prunes devDeps with `npm prune --omit=dev`, copies `node_modules` directly into the production stage — sqlite3 is never compiled twice
