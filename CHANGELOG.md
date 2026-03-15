@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.1 - NIGHT Fan Speed
+
+#### Fixed
+- **Protocol**: Added `NIGHT = 3` to `FanSpeed` enum based on the official Ambientika Smart APP manual (P06506000). Value `3` is the night-time speed set automatically by SMART and NIGHT operating modes — previously triggered a warning and fell back to MEDIUM.
+
+#### Changed
+- `night` is now exposed as a selectable fan mode in Home Assistant and accepted as a valid MQTT fan speed command.
+
+---
+
+### Version 1.1.0 - Full Test Suite & CI/CD
+
+#### Added
+- **Test suite**: 225 tests across all services (Vitest + `@vitest/coverage-v8`), covering 93% of the codebase.
+- **Automated release workflow**: merging a PR to `master` with a bumped `config.yaml` version now automatically creates the GitHub release and triggers Docker image builds for `amd64` and `aarch64`.
+- **Protocol reference**: comprehensive JSDoc on all enums and a Protocol Reference section in the README documenting the binary TCP protocol, byte layouts, and all known values — cross-referenced against the official Ambientika manual.
+- Official Ambientika icon for the Home Assistant add-on store.
+
+#### Fixed
+- **TypeScript build**: test files were being compiled by `tsc` during `npm run build`, causing strict-mode errors in Docker. Fixed by adding `exclude` to `tsconfig.json`.
+- **Node.js deprecation warnings** in GitHub Actions: opted into Node.js 24 for all actions runners via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`.
+- **CI arm64 build**: switched from QEMU emulation to native `ubuntu-24.04-arm` runner — faster and more reliable.
+
+---
+
 ### Version 1.0.41 - TypeScript Build Fix
 
 #### Fixed
