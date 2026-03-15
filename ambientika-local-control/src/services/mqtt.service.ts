@@ -474,8 +474,12 @@ export class MqttService {
     }
 
     private handleWeatherUpdate(message: Buffer): void {
-        const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
-        this.eventService.deviceWeatherUpdate(weatherUpdate);
+        try {
+            const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
+            this.eventService.deviceWeatherUpdate(weatherUpdate);
+        } catch (err) {
+            this.log.error('Failed to parse weather update message:', err);
+        }
     }
 
     private handleFilterReset(serialNumber: string | undefined): void {
