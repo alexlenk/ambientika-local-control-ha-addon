@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.0) — must match config.yaml'
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify version matches config.yaml
+        run: |
+          CONFIG_VERSION=$(grep '^version:' ambientika-local-control/config.yaml \
+            | sed 's/version: *"\(.*\)"/\1/')
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          echo "config.yaml version : $CONFIG_VERSION"
+          echo "Requested version   : $INPUT_VERSION"
+          if [ "$CONFIG_VERSION" != "$INPUT_VERSION" ]; then
+            echo "::error::Version mismatch — update config.yaml to $INPUT_VERSION before releasing."
+            exit 1
+          fi
+
+      - name: Verify tag does not already exist
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "::error::Tag $TAG already exists. Bump the version in config.yaml first."
+            exit 1
+          fi
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="v${{ github.event.inputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
