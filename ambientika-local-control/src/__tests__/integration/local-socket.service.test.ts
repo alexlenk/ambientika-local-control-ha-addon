@@ -249,5 +249,41 @@ describe('LocalSocketService', () => {
 
             expect(mockLog.error).toHaveBeenCalled();
         });
+
+        it('logs error when connectionKey exists in deviceConnections but socket not found in clients', () => {
+            serverHandlers['connection']?.(mockSocket);
+            // Register device so connectionKey is mapped
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+
+            // Manually remove the socket from clients but keep deviceConnections entry
+            const connectionKey = `${mockSocket.remoteAddress}:${mockSocket.remotePort}`;
+            (service as any).clients.delete(connectionKey);
+
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0xaa; commandBuf[3] = 0xbb; commandBuf[4] = 0xcc;
+            commandBuf[5] = 0xdd; commandBuf[6] = 0xee; commandBuf[7] = 0xff;
+
+            service.write(commandBuf, '192.168.1.100');
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('Socket for device aabbccddeeff')
+            );
+        });
+
+        it('falls back to remoteAddress lookup when no serial-based connectionKey found', () => {
+            serverHandlers['connection']?.(mockSocket);
+            // Add the socket directly via the remoteAddress key (simulating the fallback path)
+            (service as any).clients.set('192.168.1.100', mockSocket);
+
+            // Use a buffer with an unregistered serial number so primary lookup fails
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0x99; commandBuf[3] = 0x88; commandBuf[4] = 0x77;
+            commandBuf[5] = 0x66; commandBuf[6] = 0x55; commandBuf[7] = 0x44;
+
+            service.write(commandBuf, '192.168.1.100');
+
+            // Fallback path writes via remoteAddress
+            expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
     });
 });

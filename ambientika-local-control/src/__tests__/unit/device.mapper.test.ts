@@ -209,6 +209,47 @@ describe('DeviceMapper', () => {
         });
     });
 
+    describe('Device.equals()', () => {
+        it('returns true when two devices have the same serialNumber', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(0xaa, 2); buf.writeUInt8(0xbb, 3); buf.writeUInt8(0xcc, 4);
+            buf.writeUInt8(0xdd, 5); buf.writeUInt8(0xee, 6); buf.writeUInt8(0xff, 7);
+            const d1 = mapper.deviceFromSocketBuffer(buf, '192.168.1.1');
+            const d2 = mapper.deviceFromSocketBuffer(buf, '192.168.1.2');
+            expect(d1.equals(d2)).toBe(true);
+        });
+
+        it('returns false when two devices have different serialNumbers', () => {
+            const buf1 = Buffer.alloc(21);
+            buf1.writeUInt8(0xaa, 2); buf1.writeUInt8(0xbb, 3); buf1.writeUInt8(0xcc, 4);
+            buf1.writeUInt8(0xdd, 5); buf1.writeUInt8(0xee, 6); buf1.writeUInt8(0xff, 7);
+            const buf2 = Buffer.alloc(21);
+            buf2.writeUInt8(0x11, 2); buf2.writeUInt8(0x22, 3); buf2.writeUInt8(0x33, 4);
+            buf2.writeUInt8(0x44, 5); buf2.writeUInt8(0x55, 6); buf2.writeUInt8(0x66, 7);
+            const d1 = mapper.deviceFromSocketBuffer(buf1, '192.168.1.1');
+            const d2 = mapper.deviceFromSocketBuffer(buf2, '192.168.1.1');
+            expect(d1.equals(d2)).toBe(false);
+        });
+    });
+
+    describe('getSignedInt16FromBufferSlice error path', () => {
+        it('returns 0 and logs warning when buffer is too short for weather update', () => {
+            // 8-byte buffer — deviceWeatherUpdateFromSocketBuffer reads bytes 9-11 for temperature
+            const shortBuf = Buffer.alloc(8);
+            mapper.deviceWeatherUpdateFromSocketBuffer(shortBuf);
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not get int from buffer'));
+        });
+    });
+
+    describe('getBooleanFromBufferSlice error path', () => {
+        it('returns false and logs warning when buffer is truncated at byte 14', () => {
+            // 14-byte buffer — humidityAlarm is at bytes 14-15, which is out of range
+            const shortBuf = Buffer.alloc(14);
+            mapper.deviceFromSocketBuffer(shortBuf, '10.0.0.1');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not get boolean from buffer'));
+        });
+    });
+
     describe('deviceFromDto', () => {
         it('maps all DeviceDto fields to a Device', () => {
             const dto: DeviceDto = {

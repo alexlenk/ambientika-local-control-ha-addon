@@ -213,6 +213,22 @@ describe('HAAutoDiscoveryService', () => {
         });
     });
 
+    describe('getFanModeSensorMessage', () => {
+        it('returns valid JSON with icon mdi:fan-clock', () => {
+            const device = makeDevice();
+            const msg = JSON.parse(service.getFanModeSensorMessage(device));
+            expect(msg.icon).toBe('mdi:fan-clock');
+        });
+    });
+
+    describe('getPresetModeSensorMessage', () => {
+        it('returns valid JSON with icon mdi:tune-variant', () => {
+            const device = makeDevice();
+            const msg = JSON.parse(service.getPresetModeSensorMessage(device));
+            expect(msg.icon).toBe('mdi:tune-variant');
+        });
+    });
+
     describe('getDevicePublishTopic delegation', () => {
         it('calls mqttService.getDevicePublishTopic for each topic field', () => {
             const device = makeDevice();
