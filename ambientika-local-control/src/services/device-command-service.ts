@@ -143,7 +143,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars?.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
 
@@ -256,7 +256,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
         }
@@ -286,7 +286,7 @@ export class DeviceCommandService {
         let offset = 2;
         if (serialNumberChars) {
             serialNumberChars.forEach((octet: string) => {
-                buffer.writeInt16LE(parseInt(octet, 16), offset);
+                buffer.writeUInt8(parseInt(octet, 16), offset);
                 offset++;
             });
         }
@@ -296,7 +296,7 @@ export class DeviceCommandService {
         if (weatherUpdateDto.temperature < 0) {
             minus = true;
         }
-        let temp = weatherUpdateDto.toString().replace(/\D/g, '');
+        let temp = weatherUpdateDto.temperature.toString().replace(/\D/g, '');
         temp = temp.padEnd(4, '0').substring(0, 4);
         let tempInt = parseInt(temp);
         if (minus) {

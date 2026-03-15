@@ -375,7 +375,7 @@ export class MqttService {
 
     private unsubscribeDeviceSubscriptions(serialNumber: string): void {
         if (this.mqttClient.connected) {
-            if (!this.deviceTopicSubscriptions.has(serialNumber)) {
+            if (this.deviceTopicSubscriptions.has(serialNumber)) {
                 const subscriptionTopics = this.getSubscriptionTopics(serialNumber);
                 subscriptionTopics.forEach(topic => {
                     this.unsubscribeFromTopic(topic);
@@ -474,8 +474,12 @@ export class MqttService {
     }
 
     private handleWeatherUpdate(message: Buffer): void {
-        const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
-        this.eventService.deviceWeatherUpdate(weatherUpdate);
+        try {
+            const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
+            this.eventService.deviceWeatherUpdate(weatherUpdate);
+        } catch (err) {
+            this.log.error('Failed to parse weather update message:', err);
+        }
     }
 
     private handleFilterReset(serialNumber: string | undefined): void {
