@@ -3,8 +3,8 @@ name: Release
 # Runs automatically after every merge to master.
 # Reads the version from config.yaml and creates a tag + GitHub Release
 # only if that version hasn't been tagged yet.
-# The existing build.yml then triggers on the new tag and publishes the
-# Docker images to GHCR.
+# Then explicitly triggers build.yml via workflow_dispatch (GITHUB_TOKEN
+# cannot trigger other workflows from tag/release events — GitHub limitation).
 on:
   push:
     branches:
@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -66,3 +67,12 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+
+      - name: Trigger Docker build
+        if: steps.tag_check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build.yml \
+            --ref "${{ steps.version.outputs.tag }}" \
+            --field ref="${{ steps.version.outputs.tag }}"
