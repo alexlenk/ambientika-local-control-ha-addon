@@ -1,12 +1,16 @@
 name: Release
 
+# Runs automatically after every merge to master.
+# Reads the version from config.yaml and creates a tag + GitHub Release
+# only if that version hasn't been tagged yet.
+# The existing build.yml then triggers on the new tag and publishes the
+# Docker images to GHCR.
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g. 1.2.0) — must match config.yaml'
-        required: true
-        type: string
+  push:
+    branches:
+      - master
+    paths:
+      - 'ambientika-local-control/config.yaml'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -23,40 +27,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify version matches config.yaml
+      - name: Read version from config.yaml
+        id: version
         run: |
-          CONFIG_VERSION=$(grep '^version:' ambientika-local-control/config.yaml \
+          VERSION=$(grep '^version:' ambientika-local-control/config.yaml \
             | sed 's/version: *"\(.*\)"/\1/')
-          INPUT_VERSION="${{ github.event.inputs.version }}"
-          echo "config.yaml version : $CONFIG_VERSION"
-          echo "Requested version   : $INPUT_VERSION"
-          if [ "$CONFIG_VERSION" != "$INPUT_VERSION" ]; then
-            echo "::error::Version mismatch — update config.yaml to $INPUT_VERSION before releasing."
-            exit 1
-          fi
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION (tag: $TAG)"
 
-      - name: Verify tag does not already exist
+      - name: Check if tag already exists
+        id: tag_check
         run: |
-          TAG="v${{ github.event.inputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
           if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-            echo "::error::Tag $TAG already exists. Bump the version in config.yaml first."
-            exit 1
+            echo "Tag $TAG already exists — skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG is new — will create release."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create and push tag
+        if: steps.tag_check.outputs.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          TAG="v${{ github.event.inputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Create GitHub Release
+        if: steps.tag_check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG }}
-          name: ${{ env.TAG }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
           draft: false
           prerelease: false
