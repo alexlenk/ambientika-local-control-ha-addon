@@ -375,7 +375,7 @@ export class MqttService {
 
     private unsubscribeDeviceSubscriptions(serialNumber: string): void {
         if (this.mqttClient.connected) {
-            if (!this.deviceTopicSubscriptions.has(serialNumber)) {
+            if (this.deviceTopicSubscriptions.has(serialNumber)) {
                 const subscriptionTopics = this.getSubscriptionTopics(serialNumber);
                 subscriptionTopics.forEach(topic => {
                     this.unsubscribeFromTopic(topic);
