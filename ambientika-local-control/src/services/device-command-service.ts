@@ -296,7 +296,7 @@ export class DeviceCommandService {
         if (weatherUpdateDto.temperature < 0) {
             minus = true;
         }
-        let temp = weatherUpdateDto.toString().replace(/\D/g, '');
+        let temp = weatherUpdateDto.temperature.toString().replace(/\D/g, '');
         temp = temp.padEnd(4, '0').substring(0, 4);
         let tempInt = parseInt(temp);
         if (minus) {
