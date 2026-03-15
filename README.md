@@ -1,8 +1,8 @@
 # Ambientika Local Control - Home Assistant Add-on
 
 [![Build](https://github.com/alexlenk/ambientika-local-control-ha-addon/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/alexlenk/ambientika-local-control-ha-addon/actions/workflows/build.yml)
-![Tests](https://img.shields.io/badge/tests-185%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-225%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
 
@@ -171,6 +171,78 @@ The JSON setup command automatically:
 **Example Binary Output:**
 - JSON: `{"role": "SLAVE_OPPOSITE_MASTER", "zone": 2, "houseId": 12048}`
 - Generated hex: `02001234567890ab00020200102f0000`
+
+## Protocol Reference
+
+This section documents the Ambientika device protocol as reverse-engineered from traffic analysis and cross-referenced against the [official Ambientika Smart APP manual](https://www.ambientika.eu/cms/wp-content/uploads/P06506000_manual_Smart-APP_EN-oktober-2023.pdf) (P06506000, EN October 2023).
+
+### Operating Modes
+
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | `SMART` | Self-managing. Uses indoor temperature, air quality and light sensors vs. outdoor weather data. Automatically activates free-cooling (MASTER_SLAVE_FLOW) when indoor temp > 24°C and outdoor temp is lower. |
+| 1 | `AUTO` | Humidity-controlled. Uses humidity and twilight sensors. Triggers ventilation when humidity exceeds the configured threshold. |
+| 2 | `MANUAL_HEAT_RECOVERY` | Fixed heat-recovery at a user-chosen fan speed. All sensors disabled. |
+| 3 | `NIGHT` | All units run at NIGHT fan speed in heat-recovery mode. |
+| 4 | `AWAY_HOME` | Standby with damper closed. Starts at LOW speed when humidity exceeds 60 %. |
+| 5 | `SURVEILLANCE` | Standby with damper closed. Expels at configured speed on humidity alarm. |
+| 6 | `TIMED_EXPULSION` | All units expel at HIGH speed for **20 minutes**, then automatically return to the previous mode. |
+| 7 | `EXPULSION` | Continuous expulsion at a user-chosen fan speed. |
+| 8 | `INTAKE` | Continuous intake at a user-chosen fan speed. |
+| 9 | `MASTER_SLAVE_FLOW` | Continuous airflow from MASTER/SLAVE_EQUAL_MASTER → SLAVE_OPPOSITE_MASTER. No heat recovery. Used to isolate odours by pushing air into a room. |
+| 10 | `SLAVE_MASTER_FLOW` | Reverse of MASTER_SLAVE_FLOW. Air flows from SLAVE_OPPOSITE_MASTER → MASTER. |
+| 11 | `OFF` | All units off. Sensors disabled. Damper closed. |
+
+> **Note:** `MASTER_SLAVE_FLOW` and `SLAVE_MASTER_FLOW` can be set manually or triggered automatically by `SMART` mode's free-cooling logic.
+
+### Fan Speeds
+
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | `LOW` | Minimum speed ("speed 1" in the manual). |
+| 1 | `MEDIUM` | Average speed ("speed 2" in the manual). |
+| 2 | `HIGH` | Maximum speed. |
+| 3 | `NIGHT` | Night-time speed — quieter than LOW. Set automatically by SMART and NIGHT modes, and by MASTER_SLAVE_FLOW free-cooling at night. |
+
+### Device Roles
+
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | `MASTER` | Primary device. Reads environmental sensors and receives all commands. Propagates commands to slaves. |
+| 1 | `SLAVE_EQUAL_MASTER` | Secondary device. Runs in the **same** airflow direction as the master. |
+| 2 | `SLAVE_OPPOSITE_MASTER` | Secondary device. Runs in the **opposite** airflow direction to the master (used for cross-room ventilation in flow modes). |
+
+> **Important:** Commands must always be sent to the MASTER device. The master propagates them to all slaves in the zone.
+
+### Humidity Thresholds
+
+| Value | Name | Trigger level |
+|-------|------|--------------|
+| 0 | `DRY` | 40 % relative humidity |
+| 1 | `NORMAL` | 60 % relative humidity |
+| 2 | `MOIST` | 75 % relative humidity |
+
+Used by `AUTO` and `SURVEILLANCE` modes to decide when to start ventilation.
+
+### Device Status Packet (21 bytes, TCP)
+
+| Byte(s) | Content |
+|---------|---------|
+| 0–1 | Packet header (`0x02 0x00`) |
+| 2–7 | Serial number (6 bytes, hex-encoded) |
+| 8 | Operating mode |
+| 9 | Fan speed |
+| 10 | Humidity level (threshold setting) |
+| 11 | Temperature (°C, integer) |
+| 12 | Humidity (%, integer) |
+| 13 | Air quality (1-based; subtract 1 before lookup) |
+| 14 | Humidity alarm (0/1 boolean) |
+| 15 | Filter status |
+| 16 | Night alarm (0/1 boolean) |
+| 17 | Device role |
+| 18 | Last operating mode |
+| 19 | Light sensitivity |
+| 20 | Signal strength |
 
 ## Supported Devices
 
