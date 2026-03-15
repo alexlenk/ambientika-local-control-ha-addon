@@ -1,5 +1,28 @@
 # Changelog
 
+### Version 1.1.1 - NIGHT Fan Speed
+
+#### Fixed
+- Added `NIGHT` (value 3) to the fan speed enum per the official Ambientika manual. Devices in SMART or NIGHT mode now report the correct fan speed instead of triggering a warning and falling back to MEDIUM.
+
+#### Changed
+- `night` is now a selectable fan speed option in Home Assistant.
+
+---
+
+### Version 1.1.0 - Full Test Suite & CI/CD
+
+#### Added
+- Full automated test suite (225 tests, 93% coverage).
+- Automated release pipeline: bump version in `config.yaml`, open PR, merge → release and Docker images are published automatically.
+- Official Ambientika icon in the add-on store.
+
+#### Fixed
+- Various TypeScript build and CI fixes.
+- Native arm64 Docker builds (no QEMU).
+
+---
+
 ### Version 1.0.37 - JSON Device Setup Commands
 
 #### Added
