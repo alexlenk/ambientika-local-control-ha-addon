@@ -174,4 +174,210 @@ describe('MqttService', () => {
             expect((service as any).deviceTopicSubscriptions.size).toBe(0);
         });
     });
+
+    describe('DEVICE_STATUS_UPDATE_RECEIVED event listener', () => {
+        beforeEach(() => {
+            process.env.PRESET_MODE_STATE_TOPIC = 'ambientika/%serialNumber/preset/state';
+            process.env.MODE_STATE_TOPIC = 'ambientika/%serialNumber/mode/state';
+            process.env.ACTION_STATE_TOPIC = 'ambientika/%serialNumber/action';
+            process.env.FAN_MODE_STATE_TOPIC = 'ambientika/%serialNumber/fan-mode/state';
+            process.env.CURRENT_TEMPERATURE_TOPIC = 'ambientika/%serialNumber/temperature';
+            process.env.CURRENT_HUMIDITY_TOPIC = 'ambientika/%serialNumber/humidity';
+            process.env.TARGET_HUMIDITY_STATE_TOPIC = 'ambientika/%serialNumber/target-humidity/state';
+            process.env.CURRENT_HUMIDITY_LEVEL_TOPIC = 'ambientika/%serialNumber/humidity-level';
+            process.env.CURRENT_AIR_QUALITY_TOPIC = 'ambientika/%serialNumber/air-quality';
+            process.env.HUMIDITY_ALARM_TOPIC = 'ambientika/%serialNumber/humidity-alarm';
+            process.env.FILTER_STATUS_TOPIC = 'ambientika/%serialNumber/filter-status';
+            process.env.NIGHT_ALARM_TOPIC = 'ambientika/%serialNumber/night-alarm';
+            process.env.LIGHT_SENSITIVITY_TOPIC = 'ambientika/%serialNumber/light-sensitivity/state';
+            process.env.AVAILABILITY_TOPIC = 'ambientika/%serialNumber/availability';
+            process.env.FAN_STATUS_TOPIC = 'ambientika/%serialNumber/fan-status';
+            process.env.FAN_MODE_TOPIC = 'ambientika/%serialNumber/fan-mode';
+        });
+
+        it('calls mqttClient.publish multiple times when device status update is received', () => {
+            const device = makeDevice();
+            eventService.deviceStatusUpdate(device);
+
+            expect(mockMqttClient.publish).toHaveBeenCalled();
+        });
+
+        it('sends device availability "online" when device status update is received', () => {
+            process.env.AVAILABILITY_TOPIC = 'ambientika/%serialNumber/availability';
+            const device = makeDevice('aabbccddeeff');
+            eventService.deviceStatusUpdate(device);
+
+            const availabilityCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('availability')
+            );
+            expect(availabilityCalls.some(([, msg]: [string, string]) => msg === 'online')).toBe(true);
+        });
+
+        it('sends device offline availability on DEVICE_OFFLINE event', () => {
+            const device = makeDevice('aabbccddeeff');
+            eventService.deviceOffline(device);
+
+            const availabilityCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('availability')
+            );
+            expect(availabilityCalls.some(([, msg]: [string, string]) => msg === 'offline')).toBe(true);
+        });
+
+        it('subscribes device topics when device status update received and not yet subscribed', () => {
+            const device = makeDevice('aabbccddeeff');
+            eventService.deviceStatusUpdate(device);
+
+            expect((service as any).deviceTopicSubscriptions.has('aabbccddeeff')).toBe(true);
+        });
+
+        it('does not call sendDeviceDiscoveryMessages when device already subscribed', () => {
+            const sendDiscoverySpy = vi.spyOn(service as any, 'sendDeviceDiscoveryMessages');
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+            const device = makeDevice('aabbccddeeff');
+            eventService.deviceStatusUpdate(device);
+
+            expect(sendDiscoverySpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleMessages routing', () => {
+        beforeEach(() => {
+            process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
+            process.env.WEATHER_UPDATE_TOPIC = 'ambientika/weather';
+            process.env.FAN_MODE_COMMAND_TOPIC = 'ambientika/%serialNumber/fan-mode/set';
+            process.env.PRESET_MODE_COMMAND_TOPIC = 'ambientika/%serialNumber/preset/set';
+            process.env.MODE_COMMAND_TOPIC = 'ambientika/%serialNumber/mode/set';
+            process.env.TARGET_HUMIDITY_COMMAND_TOPIC = 'ambientika/%serialNumber/target-humidity/set';
+            process.env.FILTER_RESET_TOPIC = 'ambientika/%serialNumber/filter-reset';
+            process.env.DEVICE_SETUP_COMMAND_TOPIC = 'ambientika/%serialNumber/setup';
+            process.env.DEVICE_SETUP_JSON_TOPIC = 'ambientika/%serialNumber/setup-json';
+            process.env.RAW_COMMAND_TOPIC = 'ambientika/%serialNumber/raw';
+            process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC = 'ambientika/%serialNumber/light-sensitivity/set';
+            // Pre-register device serial number so extractSerialNumberFromTopic succeeds
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+        });
+
+        it('routes weather update topic to handleWeatherUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_WEATHER_UPDATE, listener);
+            const dto = { temperature: 22.5, humidity: 60, airQuality: 1 };
+            mqttEventHandlers['message']?.('ambientika/weather', Buffer.from(JSON.stringify(dto)));
+
+            expect(listener).toHaveBeenCalledWith(dto);
+        });
+
+        it('routes fan mode command topic to deviceOperatingModeUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/fan-mode/set',
+                Buffer.from('low')
+            );
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('ignores invalid fan speed values', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/fan-mode/set',
+                Buffer.from('invalid_speed')
+            );
+
+            expect(listener).not.toHaveBeenCalled();
+            expect(mockLog.warn).toHaveBeenCalledWith(
+                expect.stringContaining('Invalid fan speed')
+            );
+        });
+
+        it('routes preset mode command topic to deviceOperatingModeUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/preset/set',
+                Buffer.from('NIGHT')
+            );
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('routes filter reset topic to deviceFilterReset', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_FILTER_RESET, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/filter-reset',
+                Buffer.from('')
+            );
+
+            expect(listener).toHaveBeenCalledWith('aabbccddeeff');
+        });
+
+        it('routes device setup JSON topic to deviceSetupUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
+            const setupJson = { role: 'MASTER', zone: 0, houseId: 1 };
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup-json',
+                Buffer.from(JSON.stringify(setupJson))
+            );
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('logs error for invalid JSON device setup', () => {
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup-json',
+                Buffer.from('not-json')
+            );
+
+            expect(mockLog.error).toHaveBeenCalled();
+        });
+
+        it('logs error for JSON setup with missing required fields', () => {
+            const incompleteSetup = { role: 'MASTER' }; // missing zone and houseId
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup-json',
+                Buffer.from(JSON.stringify(incompleteSetup))
+            );
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('missing required fields')
+            );
+        });
+
+        it('warns for unknown topic (topic has serial but no known command)', () => {
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/unknown-command',
+                Buffer.from('value')
+            );
+
+            expect(mockLog.warn).toHaveBeenCalled();
+        });
+
+        it('warns when serial number not found in topic', () => {
+            mqttEventHandlers['message']?.(
+                'ambientika/no-serial-here/command',
+                Buffer.from('value')
+            );
+
+            expect(mockLog.warn).toHaveBeenCalled();
+        });
+    });
+
+    describe('REMOTE_SOCKET_CONNECTED / DISCONNECTED events', () => {
+        it('calls findExistingDeviceByRemoteAddress on REMOTE_SOCKET_CONNECTED', () => {
+            eventService.remoteSocketConnected('192.168.1.1');
+            expect(mockStorage.findExistingDeviceByRemoteAddress).toHaveBeenCalledWith(
+                '192.168.1.1', expect.any(Function)
+            );
+        });
+
+        it('calls findExistingDeviceByRemoteAddress on REMOTE_SOCKET_DISCONNECTED', () => {
+            eventService.remoteSocketDisconnected('192.168.1.1');
+            expect(mockStorage.findExistingDeviceByRemoteAddress).toHaveBeenCalledWith(
+                '192.168.1.1', expect.any(Function)
+            );
+        });
+    });
 });
