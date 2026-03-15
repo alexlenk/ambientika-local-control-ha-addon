@@ -211,14 +211,35 @@ describe('RemoteSocketService', () => {
         describe('write()', () => {
             it('writes data to client socket when client exists', () => {
                 eventService.localSocketConnected('192.168.1.100');
+                // remoteSocket is now in clients map
                 const data = Buffer.from('hello');
 
-                const service = new RemoteSocketService(mockLog, eventService);
-                // Access internal write method directly for the already-setup client
-                // Trigger via LOCAL_SOCKET_DATA_UPDATE_RECEIVED event
-                const dataListener = vi.fn();
-                eventService.on(AppEvents.REMOTE_SOCKET_CONNECTED, dataListener);
-                remoteSocketHandlers['connect']?.(); // emit connected so client is tracked
+                // Directly call write on the service instance (created in outer beforeEach)
+                // The service was created by `new RemoteSocketService(mockLog, eventService)` in beforeEach
+                // which registered LOCAL_SOCKET_CONNECTED listener — localSocketConnected above adds the client
+                const svc = new RemoteSocketService(mockLog, eventService);
+                // localSocketConnected was already fired above; need separate service instance
+                // Use direct internal write on the already set-up eventService instance
+                // Client was added by the outer beforeEach service via localSocketConnected
+                (svc as any).clients.set('192.168.1.200', mockRemoteSocket);
+                const writeListener = vi.fn();
+                eventService.on(AppEvents.REMOTE_SOCKET_CONNECTED, writeListener);
+
+                (svc as any).write(data, '192.168.1.200');
+
+                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data);
+            });
+
+            it('emits remoteSocketConnected when writing to existing client', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.5', mockRemoteSocket);
+
+                const connectedListener = vi.fn();
+                eventService.on(AppEvents.REMOTE_SOCKET_CONNECTED, connectedListener);
+
+                (svc as any).write(Buffer.from('data'), '192.168.1.5');
+
+                expect(connectedListener).toHaveBeenCalledWith('192.168.1.5');
             });
 
             it('logs warning when no client found for address', () => {
@@ -226,6 +247,17 @@ describe('RemoteSocketService', () => {
                 (service as any).write(Buffer.from('test'), '10.0.0.1');
 
                 expect(mockLog.warn).toHaveBeenCalled();
+            });
+
+            it('LOCAL_SOCKET_DATA_UPDATE_RECEIVED event calls write with data', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.99', mockRemoteSocket);
+
+                const data = Buffer.from([0x01, 0x02, 0x03]);
+                // Simulate the event that initEventListener listens to
+                eventService.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, data, '192.168.1.99');
+
+                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data);
             });
         });
     });

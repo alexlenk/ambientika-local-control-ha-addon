@@ -13,6 +13,7 @@ export default defineConfig({
                 'src/dto/**',
                 'src/**/*.interface.ts',
                 'src/services/logger.service.ts',
+                'src/models/device-status.model.ts',
             ],
             thresholds: {
                 lines: 80,

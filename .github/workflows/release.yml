@@ -1,0 +1,68 @@
+name: Release
+
+# Runs automatically after every merge to master.
+# Reads the version from config.yaml and creates a tag + GitHub Release
+# only if that version hasn't been tagged yet.
+# The existing build.yml then triggers on the new tag and publishes the
+# Docker images to GHCR.
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'ambientika-local-control/config.yaml'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Read version from config.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' ambientika-local-control/config.yaml \
+            | sed 's/version: *"\(.*\)"/\1/')
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION (tag: $TAG)"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG is new — will create release."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag_check.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release
+        if: steps.tag_check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false

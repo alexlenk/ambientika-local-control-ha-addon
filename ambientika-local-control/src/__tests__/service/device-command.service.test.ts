@@ -148,6 +148,38 @@ describe('DeviceCommandService', () => {
         });
     });
 
+    describe('getOperatingMode LAST mode', () => {
+        it('emits LOCAL_SOCKET_DATA_UPDATE when operatingMode is LAST', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            // MODE_COMMAND_TOPIC maps 'fan_only' → OperatingMode.LAST.toString() === 'LAST'
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'LAST' }, 'aabbccddeeff');
+
+            expect(listener).toHaveBeenCalled();
+        });
+    });
+
+    describe('getOperatingMode uses device mode when opMode has no operatingMode', () => {
+        it('emits LOCAL_SOCKET_DATA_UPDATE using device current mode when operatingMode is undefined', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            // Only fanSpeed provided — no operatingMode — uses device's current mode
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+
+            expect(listener).toHaveBeenCalled();
+        });
+    });
+
     describe('DEVICE_FILTER_RESET command', () => {
         it('emits LOCAL_SOCKET_DATA_UPDATE when device is found', () => {
             mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
