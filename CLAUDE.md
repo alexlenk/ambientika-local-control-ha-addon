@@ -86,7 +86,7 @@ SchedulerService            — marks stale devices offline every minute
 Devices speak a binary TCP protocol. Key packet sizes:
 - **21 bytes** — device status (parsed by `DeviceMapper.deviceFromSocketBuffer`)
 - **18 bytes** — device info / firmware versions
-- **15 bytes** — device setup (role, zone, houseId)
+- **16 bytes** — device setup: `02 00 <MAC 6b> 00 <role> <zone> 00 <houseId 4b LE>` (bytes 8 and 11 are fixed `00`)
 - **13 bytes** — operating mode command sent to device
 - **9 bytes** — filter reset command
 
@@ -96,8 +96,27 @@ Byte layout and enum values are documented in `src/models/enum/` JSDoc and in th
 
 - `OperatingMode` — 12 modes (0=SMART … 11=OFF). SMART auto-triggers MASTER_SLAVE_FLOW free-cooling.
 - `FanSpeed` — 4 speeds: LOW=0, MEDIUM=1, HIGH=2, NIGHT=3 (night-time speed, set automatically).
+- `FanMode` — MANUAL vs AUTO fan control mode.
 - `DeviceRole` — MASTER=0, SLAVE_EQUAL_MASTER=1, SLAVE_OPPOSITE_MASTER=2. **Commands always go to MASTER only.**
 - `HumidityLevel` — DRY=0 (40%), NORMAL=1 (60%), MOIST=2 (75%).
+- `AirQuality` — 5 levels: VERY_GOOD, GOOD, MEDIUM, POOR, BAD (byte 13 of status packet).
+- `FilterStatus` — GOOD or CLOGGED (byte 14 of status packet).
+- `LightSensitivity` — NOT_AVAILABLE, OFF, LOW, MEDIUM (byte 19 of status packet).
+
+### REST API (RestService)
+
+`RestService` exposes an Express HTTP server alongside MQTT. Endpoints:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/device/status/:serialNumber` | Returns current `DeviceDto` for a device |
+| `POST` | `/device/operating-mode/:serialNumber` | Sends an `OperatingModeDto` command |
+| `POST` | `/device/reset-filter/:serialNumber` | Sends a 9-byte filter reset command |
+| `POST` | `/device/weather-update` | Pushes external weather data (`WeatherUpdateDto`) |
+
+### HAAutoDiscoveryService
+
+Publishes Home Assistant MQTT auto-discovery messages so devices appear automatically as `climate` entities in HA. It maps the 12 `OperatingMode` values to HA preset modes (AUTO, NIGHT, AWAY, BOOST, SMART, HOLIDAY, MANUAL, SLEEP, INTENSIVE, GEOTHERMAL, FIREPLACE, TURBO). Fires on initial MQTT connect and whenever a new device is first seen.
 
 ## Working conventions
 

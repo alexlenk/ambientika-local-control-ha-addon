@@ -174,10 +174,23 @@ describe('DeviceCommandService — buffer generation (bug regression tests)', ()
     });
 
     describe('getDeviceSetupBufferData', () => {
-        it('allocates 15-byte buffer', () => {
+        // Protocol: 02 00 <MAC 6b> 00 <role> <zone> 00 <houseId 4b LE> = 16 bytes
+        // Verified against known-good packet: 0200aabbccddeeff00020000102f0000
+        //   → SLAVE_OPPOSITE_MASTER (role=2), zone=0, houseId=12048
+
+        it('allocates 16-byte buffer', () => {
             const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'MASTER', zoneIndex: 0, houseId: 1 };
             const buf = getSetupBuffer(dto);
-            expect(buf.length).toBe(15);
+            expect(buf.length).toBe(16);
+        });
+
+        it('writes fixed header bytes', () => {
+            const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'MASTER', zoneIndex: 0, houseId: 1 };
+            const buf = getSetupBuffer(dto);
+            expect(buf[0]).toBe(0x02);
+            expect(buf[1]).toBe(0x00);
+            expect(buf[8]).toBe(0x00);  // unknown fixed byte
+            expect(buf[11]).toBe(0x00); // unknown fixed byte
         });
 
         it('writes correct serial number at offsets 2-7', () => {
@@ -191,16 +204,28 @@ describe('DeviceCommandService — buffer generation (bug regression tests)', ()
             expect(buf[7]).toBe(0xff);
         });
 
-        it('writes zoneIndex correctly', () => {
+        it('writes device role at offset 9', () => {
+            const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'SLAVE_OPPOSITE_MASTER', zoneIndex: 0, houseId: 0 };
+            const buf = getSetupBuffer(dto);
+            expect(buf[9]).toBe(2); // SLAVE_OPPOSITE_MASTER = 2
+        });
+
+        it('writes zoneIndex at offset 10', () => {
             const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'MASTER', zoneIndex: 3, houseId: 0 };
             const buf = getSetupBuffer(dto);
             expect(buf[10]).toBe(3);
         });
 
-        it('writes houseId as uint32LE at offset 11', () => {
+        it('writes houseId as uint32LE at offset 12', () => {
             const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'MASTER', zoneIndex: 0, houseId: 12345 };
             const buf = getSetupBuffer(dto);
-            expect(buf.readUInt32LE(11)).toBe(12345);
+            expect(buf.readUInt32LE(12)).toBe(12345);
+        });
+
+        it('matches known-good packet for SLAVE_OPPOSITE_MASTER zone=0 houseId=12048', () => {
+            const dto: DeviceSetupDto = { serialNumber: 'aabbccddeeff', deviceRole: 'SLAVE_OPPOSITE_MASTER', zoneIndex: 0, houseId: 12048 };
+            const buf = getSetupBuffer(dto);
+            expect(buf.toString('hex')).toBe('0200aabbccddeeff00020000102f0000');
         });
     });
 });
