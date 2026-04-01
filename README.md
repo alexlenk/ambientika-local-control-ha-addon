@@ -73,8 +73,7 @@ This method reconfigures devices to connect directly to your Home Assistant IP a
 
 ### Prerequisites
 Download a BLE app:
-- **iOS:** "LightBlue Explorer" 
-- **Android:** "nRF Connect for Mobile"
+- **iOS/Android:** "nRF Connect"
 
 ### Provisioning Steps
 1. Put your device in pairing mode and scan for BLE devices
@@ -170,7 +169,7 @@ The JSON setup command automatically:
 
 **Example Binary Output:**
 - JSON: `{"role": "SLAVE_OPPOSITE_MASTER", "zone": 2, "houseId": 12048}`
-- Generated hex: `02001234567890ab00020200102f0000`
+- Generated hex: `02001234567890ab00020200102f0000` (16 bytes)
 
 ## Protocol Reference
 
