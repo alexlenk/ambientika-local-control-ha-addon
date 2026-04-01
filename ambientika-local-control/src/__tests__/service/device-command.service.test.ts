@@ -325,7 +325,7 @@ describe('DeviceCommandService', () => {
                 houseId: 1,
             });
 
-            expect(capturedData?.length).toBe(15);
+            expect(capturedData?.length).toBe(16);
         });
     });
 });
