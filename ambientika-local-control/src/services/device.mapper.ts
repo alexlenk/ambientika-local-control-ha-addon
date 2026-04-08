@@ -124,13 +124,13 @@ export class DeviceMapper {
         return new DeviceWeatherUpdate(serialNumber, temperature, humidity, airQuality);
     }
 
-    deviceStatusBroadCastFromBuffer(data: Buffer, serialNumber: string | undefined): DeviceBroadcastStatus {
+    deviceStatusBroadCastFromBuffer(data: Buffer, serialNumber: string | undefined, allSerialNumbers: string[] = []): DeviceBroadcastStatus {
         this.buffer = data;
         const zoneIndex = this.getIntFromBufferSlice(1, 2) & 15;
         const fanMode = FanMode[this.getIntFromBufferSlice(2, 3) >> 4];
         const fanStatus = FanStatus[this.getIntFromBufferSlice(2, 3) & 15];
-        
-        return new DeviceBroadcastStatus(serialNumber, zoneIndex, fanMode, fanStatus)
+
+        return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode, fanStatus)
     }
 
     private getHexStringFromBufferSlice(start: number, end: number): string {
