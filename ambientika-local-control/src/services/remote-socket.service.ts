@@ -80,7 +80,7 @@ export class RemoteSocketService {
                     this.log.debug('Unknown device command type');
                 }
             }
-            if (data.length === 15) {
+            if (data.length === 16) {
                 const deviceSetup = this.deviceMapper.deviceSetupFromSocketBuffer(data);
                 this.log.debug('Created device setup from data %o', deviceSetup);
                 this.eventService.deviceSetupUpdate(deviceSetup);
