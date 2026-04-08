@@ -308,7 +308,7 @@ describe('DeviceCommandService', () => {
             );
         });
 
-        it('sends 15-byte device setup buffer', () => {
+        it('sends 16-byte device setup buffer', () => {
             mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
@@ -325,7 +325,7 @@ describe('DeviceCommandService', () => {
                 houseId: 1,
             });
 
-            expect(capturedData?.length).toBe(15);
+            expect(capturedData?.length).toBe(16);
         });
     });
 });

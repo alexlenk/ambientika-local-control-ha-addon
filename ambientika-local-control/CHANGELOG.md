@@ -1,5 +1,12 @@
 # Changelog
 
+### Version 1.1.5 - Slave device roles, zone and house ID sensors
+
+#### Added
+- **Zone sensor**: each device now reports its zone index as a Home Assistant sensor (`zone`), sourced from UDP broadcast packets. The zone value is cached per device and published whenever the device state is updated.
+- **House ID sensor**: each device now reports its house ID as a Home Assistant sensor (`house_id`). The value is cached from device setup events — either when a setup command is issued from HA, or when the cloud relay intercepts a setup packet from the Ambientika cloud (requires `cloud_sync_enabled=true`).
+- **Slave device preset/fan status**: slave devices (`SLAVE_OPPOSITE_MASTER`, `SLAVE_EQUAL_MASTER`) now publish their device role string as both preset mode and fan status in Home Assistant, replacing the alternating real-time direction values which were confusing in dashboards.
+
 ### Version 1.1.4 - Fix cloud sync spurious warnings
 
 #### Fixed
