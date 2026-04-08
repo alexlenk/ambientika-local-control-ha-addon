@@ -1,7 +1,7 @@
 ARG BUILD_ARCH=amd64
 
 # Build stage: install all deps (compiles native modules once), build TS, prune devDeps
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache python3 py3-setuptools make g++
 COPY package*.json ./
@@ -13,7 +13,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Production stage: copy pre-compiled artifacts, no native recompilation needed
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 WORKDIR /app
 # No build tools required — sqlite3 is already compiled in the build stage
 RUN apk add --no-cache jq bash
