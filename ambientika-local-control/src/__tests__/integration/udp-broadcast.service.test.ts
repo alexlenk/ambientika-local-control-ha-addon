@@ -50,27 +50,20 @@ describe('UDPBroadcastService', () => {
     });
 
     describe('initialization', () => {
-        it('creates one socket per zone (ZONE_COUNT=1)', async () => {
+        it('always creates 16 sockets to cover all possible zone indices (0–15)', async () => {
             new UDPBroadcastService(mockLog, eventService);
 
             const dgram = await import('node:dgram');
-            expect(dgram.createSocket).toHaveBeenCalledTimes(1);
+            expect(dgram.createSocket).toHaveBeenCalledTimes(16);
             expect(dgram.createSocket).toHaveBeenCalledWith('udp4');
         });
 
-        it('creates two sockets when ZONE_COUNT=2', async () => {
-            process.env.ZONE_COUNT = '2';
-            new UDPBroadcastService(mockLog, eventService);
-
-            const dgram = await import('node:dgram');
-            expect(dgram.createSocket).toHaveBeenCalledTimes(2);
-        });
-
-        it('binds socket to the configured start port', () => {
+        it('binds sockets starting at the configured start port', () => {
             process.env.UDP_BROADCAST_LISTENER_START_PORT = '45000';
             new UDPBroadcastService(mockLog, eventService);
 
             expect(mockUdpSocket.bind).toHaveBeenCalledWith(45000);
+            expect(mockUdpSocket.bind).toHaveBeenCalledWith(45015);
         });
 
         it('registers message and listening event handlers', () => {

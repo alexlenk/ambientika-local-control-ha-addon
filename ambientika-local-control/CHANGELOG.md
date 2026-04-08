@@ -1,5 +1,10 @@
 # Changelog
 
+### Version 1.1.8 - Remove zone_count config option
+
+#### Changed
+- **Removed `zone_count` config option**: the add-on now always listens on all 16 possible UDP broadcast ports (45000–45015), covering every zone index the protocol supports (4-bit field, values 0–15). This eliminates a common misconfiguration where users with zones numbered 1–N needed to set `zone_count` to N+1 due to the 0-based port offset.
+
 ### Version 1.1.7 - CI fix: switch to Node 24 and npm install
 
 #### Fixed
