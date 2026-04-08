@@ -36,6 +36,8 @@ export class MqttService {
     private readonly deviceMapper: DeviceMapper;
     private readonly hAAutoDiscoveryService: HAAutoDiscoveryService;
     private readonly deviceTopicSubscriptions: Set<string> = new Set<string>();
+    private readonly deviceZones: Map<string, number> = new Map();
+    private readonly deviceHouseIds: Map<string, number> = new Map();
 
     constructor(private log: Logger,
                 private eventService: EventService,
@@ -85,9 +87,16 @@ export class MqttService {
         this.eventService.on(AppEvents.REMOTE_SOCKET_DISCONNECTED, (remoteAddress: string) => {
             this.sendDeviceCloudAvailability(remoteAddress, 'false');
         });
+        this.eventService.on(AppEvents.DEVICE_SETUP_UPDATE, (deviceSetupDto: DeviceSetupDto) => {
+            this.deviceHouseIds.set(deviceSetupDto.serialNumber, deviceSetupDto.houseId);
+            this.deviceZones.set(deviceSetupDto.serialNumber, deviceSetupDto.zoneIndex);
+        });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
                 this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}`);
+                if (deviceBroadcastStatus.serialNumber) {
+                    this.deviceZones.set(deviceBroadcastStatus.serialNumber, deviceBroadcastStatus.zoneIndex);
+                }
                 this.sendFanStatus(deviceBroadcastStatus);
                 this.sendFanMode(deviceBroadcastStatus);
             });
@@ -114,6 +123,8 @@ export class MqttService {
             // Also publish fan status from device data as fallback
             this.sendFanStatusFromDevice(device);
             this.sendFanModeFromDevice(device);
+            this.sendDeviceZone(device);
+            this.sendDeviceHouseId(device);
         });
     }
 
@@ -200,6 +211,16 @@ export class MqttService {
                     device.serialNumber, 'presetmode');
                 this.publish(topic, presetModeDiscovery);
 
+                const zoneDiscovery = this.hAAutoDiscoveryService.getZoneSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'zone');
+                this.publish(topic, zoneDiscovery);
+
+                const houseIdDiscovery = this.hAAutoDiscoveryService.getHouseIdSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'houseid');
+                this.publish(topic, houseIdDiscovery);
+
             });
         }
     }
@@ -221,12 +242,22 @@ export class MqttService {
     }
 
     private sendDeviceOperatingMode(device: Device) {
+        // Slave devices show their role instead of the operating mode — the role is stable and
+        // informative, whereas the operating mode reflects the master's real-time direction command.
+        if (this.isSlave(device)) {
+            this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
+                device.deviceRole);
+            return;
+        }
         // Check if we have a stored command that should override the device's reported mode
         const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
         const modeToPublish = storedMode || device.operatingMode;
-        
         this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
-            modeToPublish)
+            modeToPublish);
+    }
+
+    private isSlave(device: Device): boolean {
+        return device.deviceRole === 'SLAVE_OPPOSITE_MASTER' || device.deviceRole === 'SLAVE_EQUAL_MASTER';
     }
 
     private sendDeviceFanSpeed(device: Device) {
@@ -297,11 +328,33 @@ export class MqttService {
             device.lightSensitivity.toString())
     }
 
+    private sendDeviceZone(device: Device) {
+        const zone = this.deviceZones.get(device.serialNumber);
+        if (zone !== undefined) {
+            this.publish(this.getDevicePublishTopic(process.env.DEVICE_ZONE_TOPIC, device.serialNumber),
+                zone.toString());
+        }
+    }
+
+    private sendDeviceHouseId(device: Device) {
+        const houseId = this.deviceHouseIds.get(device.serialNumber);
+        if (houseId !== undefined) {
+            this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
+                houseId.toString());
+        }
+    }
+
     private sendFanStatusFromDevice(device: Device) {
+        // Slave devices show their role — their fan direction is dictated by the master.
+        if (this.isSlave(device)) {
+            this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, device.serialNumber),
+                device.deviceRole);
+            return;
+        }
         // Derive fan status from device operating mode as fallback
         let fanStatus = 'OFF';
         if (device.operatingMode !== 'OFF') {
-            fanStatus = device.fanSpeed === 'HIGH' ? 'HIGH' : 
+            fanStatus = device.fanSpeed === 'HIGH' ? 'HIGH' :
                        device.fanSpeed === 'MEDIUM' ? 'MEDIUM' : 'LOW';
         }
         this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, device.serialNumber),
