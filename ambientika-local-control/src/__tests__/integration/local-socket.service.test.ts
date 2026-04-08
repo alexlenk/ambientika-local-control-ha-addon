@@ -221,6 +221,76 @@ describe('LocalSocketService', () => {
         });
     });
 
+    describe('cloud inbound connection handling', () => {
+        const cloudSocketHandlers: Record<string, (...args: any[]) => void> = {};
+        const cloudSocket = {
+            remoteAddress: '185.214.203.87',
+            remotePort: 60000,
+            on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+                cloudSocketHandlers[event] = handler;
+            }),
+            write: vi.fn(),
+            destroy: vi.fn(),
+            destroyed: false,
+        };
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+            Object.keys(cloudSocketHandlers).forEach(k => delete cloudSocketHandlers[k]);
+            process.env.REMOTE_CLOUD_HOST = '185.214.203.87';
+            // Connect a real device first so deviceConnections is populated
+            serverHandlers['connection']?.(mockSocket);
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+            // Now simulate cloud connecting back
+            serverHandlers['connection']?.(cloudSocket);
+        });
+
+        it('does NOT emit LOCAL_SOCKET_CONNECTED for cloud connection', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_CONNECTED, listener);
+            serverHandlers['connection']?.(cloudSocket);
+            expect(listener).not.toHaveBeenCalled();
+        });
+
+        it('routes cloud data to the target device socket by serial number', () => {
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0xaa; commandBuf[3] = 0xbb; commandBuf[4] = 0xcc;
+            commandBuf[5] = 0xdd; commandBuf[6] = 0xee; commandBuf[7] = 0xff;
+
+            cloudSocketHandlers['data']?.(commandBuf);
+
+            expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
+
+        it('does NOT emit DEVICE_STATUS_UPDATE_RECEIVED for cloud echo', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, listener);
+
+            cloudSocketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+
+            expect(listener).not.toHaveBeenCalled();
+        });
+
+        it('does NOT overwrite deviceConnections with cloud socket key', () => {
+            cloudSocketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+
+            const deviceConnections = (service as any).deviceConnections;
+            const connectionKey = deviceConnections.get('aabbccddeeff');
+            expect(connectionKey).toBe('192.168.1.100:12345'); // still device, not cloud
+        });
+
+        it('warns when cloud sends command for unknown device', () => {
+            const commandBuf = Buffer.alloc(13);
+            // serial 99887766554 — not registered
+            commandBuf[2] = 0x99; commandBuf[3] = 0x88; commandBuf[4] = 0x77;
+            commandBuf[5] = 0x66; commandBuf[6] = 0x55; commandBuf[7] = 0x44;
+
+            cloudSocketHandlers['data']?.(commandBuf);
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('No connection mapping'));
+        });
+    });
+
     describe('write()', () => {
         it('writes to socket via serialNumber routing when device is connected', () => {
             serverHandlers['connection']?.(mockSocket);
