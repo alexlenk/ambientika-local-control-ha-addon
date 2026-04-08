@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.3 - Fix cloud sync connection loop
+
+#### Fixed
+- **Cloud sync**: when `cloud_sync_enabled=true`, the cloud server was connecting back to the local TCP port, triggering `LOCAL_SOCKET_CONNECTED` for the cloud host IP. This caused `RemoteSocketService` to open additional outbound connections to the cloud for each inbound cloud connection, creating a runaway feedback loop of hundreds of orphaned sockets within seconds of startup. The fix ignores `LOCAL_SOCKET_CONNECTED` events originating from the configured cloud host.
+
+---
+
 ### Version 1.1.1 - NIGHT Fan Speed
 
 #### Fixed
