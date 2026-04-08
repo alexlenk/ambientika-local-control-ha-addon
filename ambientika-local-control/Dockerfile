@@ -5,7 +5,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache python3 py3-setuptools make g++
 COPY package*.json ./
-RUN npm install
+RUN npm install --loglevel=error
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build

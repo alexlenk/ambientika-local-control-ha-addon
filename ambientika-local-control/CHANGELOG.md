@@ -1,5 +1,15 @@
 # Changelog
 
+### Version 1.1.6 - Slave zone propagation, device role sensor, dependency cleanup
+
+#### Added
+- **Slave zone propagation**: all devices sharing the same source IP as their master (master + slaves in a zone) now correctly receive the zone cached from UDP broadcasts. Previously only the master got the zone; slaves were left blank.
+- **Device role sensor**: each device now reports its role (`MASTER`, `SLAVE_EQUAL_MASTER`, `SLAVE_OPPOSITE_MASTER`) as a dedicated Home Assistant sensor, making it easy to see zone membership at a glance alongside zone and house ID.
+
+#### Fixed / Improved
+- **Dependency cleanup**: upgraded `sqlite3` from v5 to v6 (drops node-gyp, uses prebuilt binaries — eliminates most npm deprecation warnings during Docker build). Moved `node-ble` to devDependencies since it is only used by the BLE provisioning script, not the main add-on.
+- **CI**: updated `actions/checkout` and `actions/setup-node` to versions with native Node.js 24 support, eliminating the "Node.js 20 deprecated" CI warning.
+
 ### Version 1.1.5 - Slave device roles, zone and house ID sensors
 
 #### Added

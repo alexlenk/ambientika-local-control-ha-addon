@@ -93,10 +93,12 @@ export class MqttService {
         });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
-                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}`);
-                if (deviceBroadcastStatus.serialNumber) {
-                    this.deviceZones.set(deviceBroadcastStatus.serialNumber, deviceBroadcastStatus.zoneIndex);
+                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}, allSerials=${deviceBroadcastStatus.allSerialNumbers.join(',')}`);
+                // Cache zone for all devices at this IP (master + slaves)
+                for (const sn of deviceBroadcastStatus.allSerialNumbers) {
+                    this.deviceZones.set(sn, deviceBroadcastStatus.zoneIndex);
                 }
+                // Fan status/mode published only for the primary serial (master)
                 this.sendFanStatus(deviceBroadcastStatus);
                 this.sendFanMode(deviceBroadcastStatus);
             });
@@ -125,6 +127,7 @@ export class MqttService {
             this.sendFanModeFromDevice(device);
             this.sendDeviceZone(device);
             this.sendDeviceHouseId(device);
+            this.sendDeviceRole(device);
         });
     }
 
@@ -220,6 +223,11 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
                     device.serialNumber, 'houseid');
                 this.publish(topic, houseIdDiscovery);
+
+                const deviceRoleDiscovery = this.hAAutoDiscoveryService.getDeviceRoleSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'devicerole');
+                this.publish(topic, deviceRoleDiscovery);
 
             });
         }
@@ -342,6 +350,11 @@ export class MqttService {
             this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
                 houseId.toString());
         }
+    }
+
+    private sendDeviceRole(device: Device) {
+        this.publish(this.getDevicePublishTopic(process.env.DEVICE_ROLE_TOPIC, device.serialNumber),
+            device.deviceRole);
     }
 
     private sendFanStatusFromDevice(device: Device) {
