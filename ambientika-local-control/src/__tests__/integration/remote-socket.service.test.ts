@@ -267,6 +267,16 @@ describe('RemoteSocketService', () => {
 
                 expect(mockRemoteSocket.write).toHaveBeenCalledWith(data);
             });
+
+            it('does not relay LOCAL_SOCKET_DATA_UPDATE_RECEIVED from the cloud host', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('185.214.203.87', mockRemoteSocket);
+
+                const data = Buffer.from([0x01, 0x02, 0x03]);
+                eventService.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, data, '185.214.203.87');
+
+                expect(mockRemoteSocket.write).not.toHaveBeenCalled();
+            });
         });
     });
 });

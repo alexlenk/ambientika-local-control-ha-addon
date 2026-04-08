@@ -89,12 +89,16 @@ export class RemoteSocketService {
     }
 
     private initEventListener(): void {
+        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
+
         this.eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, (data: Buffer, localAddress: string) => {
+            if (localAddress === cloudHost) {
+                return;
+            }
             this.log.silly(`Update cloud data from ${localAddress}: %o`, data);
             this.write(data, localAddress);
         });
 
-        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
         this.eventService.on(AppEvents.LOCAL_SOCKET_CONNECTED, (localAddress: string) => {
             if (localAddress === cloudHost) {
                 this.log.debug(`Ignoring inbound connection from cloud host ${localAddress}`);
