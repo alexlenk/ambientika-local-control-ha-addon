@@ -1,5 +1,10 @@
 # Changelog
 
+### Version 1.1.7 - CI fix: switch to Node 24 and npm install
+
+#### Fixed
+- **CI**: switched Docker base image and CI test runner from Node 22 to Node 24 to match local development environment. Switched CI test install from `npm ci` to `npm install --ignore-scripts` to avoid lock file sync errors caused by npm version differences across environments.
+
 ### Version 1.1.6 - Slave zone propagation, device role sensor, dependency cleanup
 
 #### Added
