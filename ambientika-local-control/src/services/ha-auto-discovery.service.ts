@@ -150,6 +150,13 @@ export class HAAutoDiscoveryService {
         return this.getSensorDiscoveryMessage('house_id', process.env.HOUSE_ID_TOPIC, device, attributes);
     }
 
+    getDeviceRoleSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:account-network'
+        };
+        return this.getSensorDiscoveryMessage('device_role', process.env.DEVICE_ROLE_TOPIC, device, attributes);
+    }
+
 
     private getBinarySensorDiscoveryMessage(type: string, topic: string | undefined, device: Device,
                                             attributes?: HaAutoDiscoverDeviceAttributes): string {

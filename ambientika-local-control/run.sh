@@ -113,6 +113,7 @@ FAN_STATUS_TOPIC=ambientika/%serialNumber/fan_status
 FAN_MODE_TOPIC=ambientika/%serialNumber/fan_mode
 DEVICE_ZONE_TOPIC=ambientika/%serialNumber/zone
 HOUSE_ID_TOPIC=ambientika/%serialNumber/house_id
+DEVICE_ROLE_TOPIC=ambientika/%serialNumber/device_role
 NIGHT_ALARM_TOPIC=ambientika/%serialNumber/night_alarm
 LIGHT_SENSITIVITY_TOPIC=ambientika/%serialNumber/light_sensitivity
 LIGHT_SENSITIVITY_COMMAND_TOPIC=ambientika/%serialNumber/light_sensitivity/set
