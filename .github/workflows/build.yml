@@ -39,7 +39,7 @@ jobs:
           cache-dependency-path: ambientika-local-control/package-lock.json
 
       - name: Install dependencies (skip native compilation — tests mock all I/O)
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts
         working-directory: ambientika-local-control
 
       - name: Run tests
