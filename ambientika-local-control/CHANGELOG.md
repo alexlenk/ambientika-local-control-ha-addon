@@ -1,5 +1,15 @@
 # Changelog
 
+### Version 1.1.4 - Fix cloud sync spurious warnings
+
+#### Fixed
+- **Cloud sync**: data arriving on inbound connections from the cloud host was being relayed back to the cloud relay listener, producing repeated `REMOTE_SOCKET_DISCONNECTED` events and `Cloud socket not found` warnings for every device status update. Inbound data from the cloud host IP is now ignored by the relay, matching the same guard applied to connection events in v1.1.3.
+
+### Version 1.1.3 - Fix cloud sync connection loop
+
+#### Fixed
+- **Cloud sync**: when `cloud_sync_enabled=true`, the cloud server was connecting back to the local TCP port, triggering `LOCAL_SOCKET_CONNECTED` for the cloud host IP. This caused `RemoteSocketService` to open additional outbound connections to the cloud for each inbound cloud connection, creating a runaway feedback loop of hundreds of orphaned sockets within seconds of startup. The fix ignores `LOCAL_SOCKET_CONNECTED` events originating from the configured cloud host.
+
 ### Version 1.1.1 - NIGHT Fan Speed
 
 #### Fixed
