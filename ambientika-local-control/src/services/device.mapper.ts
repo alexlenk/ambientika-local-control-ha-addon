@@ -94,7 +94,7 @@ export class DeviceMapper {
         }
         const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
         const zoneIndex = this.getIntFromBufferSlice(10, 11);
-        const houseId = this.getUInt32LEFromBufferSlice(11, 15);
+        const houseId = this.getUInt32LEFromBufferSlice(12, 16);
         return new DeviceSetup(serialNumber, finalDeviceRole, zoneIndex, houseId);
     }
 
