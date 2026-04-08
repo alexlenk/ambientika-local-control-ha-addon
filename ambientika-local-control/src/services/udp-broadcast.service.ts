@@ -27,13 +27,10 @@ export class UDPBroadcastService {
     private initialize(): void {
         this.log.debug('Initializing UDPBroadcastService');
         this.initEventListener();
-        const zoneCount = parseInt(process.env.ZONE_COUNT || '1');
-        let listenerPort = parseInt(process.env.UDP_BROADCAST_LISTENER_START_PORT || '45000');
-        let zoneIndex = 0;
-        while (zoneIndex < zoneCount) {
-            this.initListener(zoneIndex, listenerPort);
-            zoneIndex++;
-            listenerPort++;
+        const startPort = parseInt(process.env.UDP_BROADCAST_LISTENER_START_PORT || '45000');
+        // Zone index is 4 bits (0–15) in the protocol, so open all 16 possible ports
+        for (let zoneIndex = 0; zoneIndex < 16; zoneIndex++) {
+            this.initListener(zoneIndex, startPort + zoneIndex);
         }
     }
 
