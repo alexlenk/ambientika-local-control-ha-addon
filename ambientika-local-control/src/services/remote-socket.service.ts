@@ -94,7 +94,12 @@ export class RemoteSocketService {
             this.write(data, localAddress);
         });
 
+        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
         this.eventService.on(AppEvents.LOCAL_SOCKET_CONNECTED, (localAddress: string) => {
+            if (localAddress === cloudHost) {
+                this.log.debug(`Ignoring inbound connection from cloud host ${localAddress}`);
+                return;
+            }
             this.log.debug(`Local device connected: ${localAddress} init cloud connection`);
             this.initRemoteSocketServer(localAddress);
         });

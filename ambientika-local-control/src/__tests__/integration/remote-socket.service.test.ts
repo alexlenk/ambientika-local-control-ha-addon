@@ -102,6 +102,14 @@ describe('RemoteSocketService', () => {
             expect(mockRemoteSocket.connect).toHaveBeenCalledWith(11000, '185.214.203.87');
         });
 
+        it('does not open a cloud connection when the cloud host itself connects locally', async () => {
+            eventService.localSocketConnected('185.214.203.87');
+
+            const net = await import('node:net');
+            expect(net.Socket).not.toHaveBeenCalled();
+            expect(mockRemoteSocket.connect).not.toHaveBeenCalled();
+        });
+
         it('registers connect, close, error, and data handlers on the remote socket', () => {
             eventService.localSocketConnected('192.168.1.100');
 
