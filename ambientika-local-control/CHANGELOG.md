@@ -1,5 +1,17 @@
 # Changelog
 
+### Version 1.1.10 - Fix cloud inbound connection routing
+
+#### Fixed
+- **Cloud sync**: commands and setup packets sent by the cloud via its inbound connection were not being forwarded to the target device. The cloud connects back to the add-on on port 11000 to push setup/commands, but `LocalSocketService` was discarding this data instead of routing it to the correct device by serial number.
+- **Cloud sync**: cloud echo of device status packets was overwriting the internal connection map, causing HA commands to be routed to the cloud socket instead of the actual device.
+
+### Version 1.1.9 - Fix 16-byte setup packet parsing
+
+#### Fixed
+- **Cloud sync**: setup packets from the Ambientika cloud were silently dropped due to an incorrect length check (15 bytes instead of the correct 16). This prevented device role, zone, and house ID assignments made in the Ambientika app from taking effect.
+- **Cloud sync**: house ID was parsed from the wrong byte offset (byte 11 instead of byte 12). Byte 11 is a fixed `0x00` padding byte; the house ID occupies bytes 12–15 (uint32 little-endian).
+
 ### Version 1.1.8 - Remove zone_count config option
 
 #### Changed
