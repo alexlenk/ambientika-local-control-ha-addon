@@ -32,7 +32,6 @@ MQTT_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_host // "core-mosquitt
 MQTT_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_port // 1883')
 MQTT_USERNAME=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_username // ""')
 MQTT_PASSWORD=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_password // ""')
-ZONE_COUNT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.zone_count // 3')
 CLOUD_SYNC_ENABLED=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_sync_enabled // false')
 CLOUD_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_host // "185.214.203.87"')
 CLOUD_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_port // 11000')
@@ -44,7 +43,6 @@ LOG_LEVEL=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_level // "info"')
 
 log_info "🔧 Configuration loaded:"
 log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
-log_info "  Zones: $ZONE_COUNT"
 log_info "  Local Socket: $LOCAL_SOCKET_PORT"
 log_info "  REST API: $REST_API_PORT"
 log_info "  Log Level: $LOG_LEVEL"
@@ -65,8 +63,6 @@ LOG_LEVEL=${LOG_LEVEL}
 CLOUD_SYNC_ENABLED=${CLOUD_SYNC_ENABLED}
 REMOTE_CLOUD_SOCKET_PORT=${CLOUD_PORT}
 REMOTE_CLOUD_HOST=${CLOUD_HOST}
-
-ZONE_COUNT=${ZONE_COUNT}
 
 UDP_BROADCAST_LISTENER_START_PORT=${UDP_BROADCAST_START_PORT}
 
@@ -126,7 +122,6 @@ EOF
 # Log configuration
 log_info "📊 Final configuration:"
 log_info "  MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
-log_info "  Zone Count: ${ZONE_COUNT}"
 log_info "  Cloud Sync: ${CLOUD_SYNC_ENABLED}"
 log_info "  Database: /data/devices.db"
 log_info "  .env file created successfully"
