@@ -137,17 +137,19 @@ describe('DeviceMapper', () => {
     });
 
     describe('deviceSetupFromSocketBuffer', () => {
-        it('parses role, zone, and houseId from 15-byte buffer', () => {
-            const buf = Buffer.alloc(15);
+        it('parses role, zone, and houseId from 16-byte buffer', () => {
+            const buf = Buffer.alloc(16);
             buf.writeUInt8(0xaa, 2);
             buf.writeUInt8(0xbb, 3);
             buf.writeUInt8(0xcc, 4);
             buf.writeUInt8(0xdd, 5);
             buf.writeUInt8(0xee, 6);
             buf.writeUInt8(0xff, 7);
+            buf.writeUInt8(0x00, 8);               // fixed 0x00
             buf.writeUInt8(DeviceRole.SLAVE_EQUAL_MASTER, 9);  // deviceRole = SLAVE_EQUAL_MASTER (1)
             buf.writeUInt8(2, 10);                 // zoneIndex = 2
-            buf.writeUInt32LE(12345, 11);          // houseId = 12345
+            buf.writeUInt8(0x00, 11);              // fixed 0x00
+            buf.writeUInt32LE(12345, 12);          // houseId = 12345
 
             const setup = mapper.deviceSetupFromSocketBuffer(buf);
 
@@ -158,7 +160,7 @@ describe('DeviceMapper', () => {
         });
 
         it('falls back to MASTER for unknown role in setup', () => {
-            const buf = Buffer.alloc(15);
+            const buf = Buffer.alloc(16);
             buf.writeUInt8(99, 9);
 
             const setup = mapper.deviceSetupFromSocketBuffer(buf);

@@ -48,9 +48,9 @@ function make13ByteBuffer(commandType = 1): Buffer {
     return buf;
 }
 
-// 15-byte device setup buffer
-function make15ByteBuffer(): Buffer {
-    const buf = Buffer.alloc(15);
+// 16-byte device setup buffer
+function make16ByteBuffer(): Buffer {
+    const buf = Buffer.alloc(16);
     buf[2] = 0xaa; buf[3] = 0xbb; buf[4] = 0xcc;
     buf[5] = 0xdd; buf[6] = 0xee; buf[7] = 0xff;
     return buf;
@@ -153,11 +153,11 @@ describe('RemoteSocketService', () => {
                 expect(listener).toHaveBeenCalled();
             });
 
-            it('emits deviceSetupUpdate for 15-byte data', () => {
+            it('emits deviceSetupUpdate for 16-byte data', () => {
                 const listener = vi.fn();
                 eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
 
-                remoteSocketHandlers['data']?.(make15ByteBuffer());
+                remoteSocketHandlers['data']?.(make16ByteBuffer());
 
                 expect(listener).toHaveBeenCalled();
             });
