@@ -110,6 +110,12 @@ export class LocalSocketService {
                     } else {
                         this.log.warn(`No connection mapping for device ${serialHex} to route cloud command`);
                     }
+                    // Emit setup update so zone/role are reflected in HA immediately
+                    if (data.length === 15 || data.length === 16) {
+                        const deviceSetup = this.deviceMapper.deviceSetupFromSocketBuffer(data);
+                        this.log.debug(`Cloud setup for ${serialHex}: role=${deviceSetup.deviceRole}, zone=${deviceSetup.zoneIndex}`);
+                        this.eventService.deviceSetupUpdate(deviceSetup);
+                    }
                 }
                 return;
             }

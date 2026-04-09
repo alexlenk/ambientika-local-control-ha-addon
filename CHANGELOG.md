@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.14 - Fix zone sensor for slave devices after cloud role change
+
+#### Fixed
+- **Zone sensor**: when the cloud sends a setup packet (role/zone change) to a device via the inbound back-channel, the zone was routed to the device but never emitted as a `DEVICE_SETUP_UPDATE` event. Slave devices (which don't broadcast UDP) would therefore show "unknown" for their zone sensor in HA after a master/slave swap. The local socket service now emits `deviceSetupUpdate` for all 15/16-byte setup packets routed from the cloud.
+
+---
+
 ### Version 1.1.13 - Fix cloud sync: forward real device packets
 
 #### Fixed
