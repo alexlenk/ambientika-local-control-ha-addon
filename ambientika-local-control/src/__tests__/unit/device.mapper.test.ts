@@ -137,7 +137,7 @@ describe('DeviceMapper', () => {
     });
 
     describe('deviceSetupFromSocketBuffer', () => {
-        it('parses role, zone, and houseId from 16-byte buffer', () => {
+        it('parses role, zone, and houseId from 16-byte buffer (proxy-injected format)', () => {
             const buf = Buffer.alloc(16);
             buf.writeUInt8(0xaa, 2);
             buf.writeUInt8(0xbb, 3);
@@ -145,10 +145,10 @@ describe('DeviceMapper', () => {
             buf.writeUInt8(0xdd, 5);
             buf.writeUInt8(0xee, 6);
             buf.writeUInt8(0xff, 7);
-            buf.writeUInt8(0x00, 8);               // fixed 0x00
+            buf.writeUInt8(0x00, 8);               // padding
             buf.writeUInt8(DeviceRole.SLAVE_EQUAL_MASTER, 9);  // deviceRole = SLAVE_EQUAL_MASTER (1)
             buf.writeUInt8(2, 10);                 // zoneIndex = 2
-            buf.writeUInt8(0x00, 11);              // fixed 0x00
+            buf.writeUInt8(0x00, 11);              // padding
             buf.writeUInt32LE(12345, 12);          // houseId = 12345
 
             const setup = mapper.deviceSetupFromSocketBuffer(buf);
@@ -157,6 +157,27 @@ describe('DeviceMapper', () => {
             expect(setup.deviceRole).toBe('SLAVE_EQUAL_MASTER');
             expect(setup.zoneIndex).toBe(2);
             expect(setup.houseId).toBe(12345);
+        });
+
+        it('parses role, zone, and houseId from 15-byte buffer (cloud format)', () => {
+            const buf = Buffer.alloc(15);
+            buf.writeUInt8(0xaa, 2);
+            buf.writeUInt8(0xbb, 3);
+            buf.writeUInt8(0xcc, 4);
+            buf.writeUInt8(0xdd, 5);
+            buf.writeUInt8(0xee, 6);
+            buf.writeUInt8(0xff, 7);
+            buf.writeUInt8(0x00, 8);               // padding
+            buf.writeUInt8(DeviceRole.MASTER, 9);  // deviceRole = MASTER (0)
+            buf.writeUInt8(0, 10);                 // zoneIndex = 0
+            buf.writeUInt32LE(12048, 11);          // houseId = 12048 (no padding at byte 11)
+
+            const setup = mapper.deviceSetupFromSocketBuffer(buf);
+
+            expect(setup.serialNumber).toBe('aabbccddeeff');
+            expect(setup.deviceRole).toBe('MASTER');
+            expect(setup.zoneIndex).toBe(0);
+            expect(setup.houseId).toBe(12048);
         });
 
         it('falls back to MASTER for unknown role in setup', () => {

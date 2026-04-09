@@ -32,3 +32,8 @@ Thumbs.db
 
 # Temporary clones for reference
 _cloud-integration/
+
+# Research / working notes (session-persistent, not committed)
+_research/
+research/.token
+research/__pycache__/
