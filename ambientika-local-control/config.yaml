@@ -1,5 +1,5 @@
 name: Ambientika Local Control
-version: "1.1.2"
+version: "1.1.12"
 slug: ambientika_local_control
 description: Local control for Ambientika devices with MQTT integration (based on ambientika-local-control by sragas)
 url: https://github.com/alexlenk/ambientika-local-control-ha-addon
@@ -22,7 +22,6 @@ options:
   mqtt_port: 1883
   mqtt_username: ""
   mqtt_password: ""
-  zone_count: 3
   cloud_sync_enabled: false
   cloud_host: "185.214.203.87"
   cloud_port: 11000
@@ -36,7 +35,6 @@ schema:
   mqtt_port: int(1,65535)
   mqtt_username: str?
   mqtt_password: password?
-  zone_count: int(1,10)
   cloud_sync_enabled: bool
   cloud_host: str?
   cloud_port: int(1,65535)?

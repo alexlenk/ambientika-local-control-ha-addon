@@ -136,6 +136,27 @@ export class HAAutoDiscoveryService {
         return this.getSensorDiscoveryMessage('preset_mode', process.env.PRESET_MODE_STATE_TOPIC, device, attributes);
     }
 
+    getZoneSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:home-group'
+        };
+        return this.getSensorDiscoveryMessage('zone', process.env.DEVICE_ZONE_TOPIC, device, attributes);
+    }
+
+    getHouseIdSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:home-account'
+        };
+        return this.getSensorDiscoveryMessage('house_id', process.env.HOUSE_ID_TOPIC, device, attributes);
+    }
+
+    getDeviceRoleSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:account-network'
+        };
+        return this.getSensorDiscoveryMessage('device_role', process.env.DEVICE_ROLE_TOPIC, device, attributes);
+    }
+
 
     private getBinarySensorDiscoveryMessage(type: string, topic: string | undefined, device: Device,
                                             attributes?: HaAutoDiscoverDeviceAttributes): string {

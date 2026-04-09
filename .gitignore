@@ -29,3 +29,10 @@ Thumbs.db
 # SQLite databases
 *.db
 *.sqlite
+
+# Temporary clones for reference
+_cloud-integration/
+
+# Research / working notes (not committed)
+_research/
+research/

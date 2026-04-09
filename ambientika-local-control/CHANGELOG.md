@@ -1,5 +1,64 @@
 # Changelog
 
+### Version 1.1.11 - Fix orphaned cloud socket, 15-byte setup, cloud debug logging
+
+#### Fixed
+- **Cloud sync**: when a device reconnected, the old cloud socket was left open but removed from the active map. When it eventually closed, its `close` handler deleted the *new* socket entry for the same IP — silently breaking cloud forwarding until the next add-on restart. Fixed by guarding the close handler with an identity check (`clients.get(ip) === thisSocket`).
+- **Cloud sync**: cloud-initiated setup packets (15 bytes) were silently dropped because the parser only accepted 16-byte proxy-injected setups. Both lengths are now accepted; `houseId` is read from offset 11 for 15-byte and offset 12 for 16-byte packets.
+
+#### Added
+- **Cloud sync debug logging** (silly level): every raw packet forwarded to the cloud is now hex-logged before write (`→ cloud [ip] Nb: <hex>`) and confirmed after kernel flush (`✓ cloud [ip] Nb flushed to kernel`), making it possible to verify exactly what the proxy is sending and that TCP accepted it.
+- **Debug REST endpoint** `POST /cloud/send-setup/:serialNumber` — injects a 16-byte setup packet into the cloud relay for a device without going through the Ambientika app. Useful for diagnosing cloud sync role/zone assignment.
+
+### Version 1.1.10 - Fix cloud inbound connection routing
+
+#### Fixed
+- **Cloud sync**: commands and setup packets sent by the cloud via its inbound connection were not being forwarded to the target device. The cloud connects back to the add-on on port 11000 to push setup/commands, but `LocalSocketService` was discarding this data instead of routing it to the correct device by serial number.
+- **Cloud sync**: cloud echo of device status packets was overwriting the internal connection map, causing HA commands to be routed to the cloud socket instead of the actual device.
+
+### Version 1.1.9 - Fix 16-byte setup packet parsing
+
+#### Fixed
+- **Cloud sync**: setup packets from the Ambientika cloud were silently dropped due to an incorrect length check (15 bytes instead of the correct 16). This prevented device role, zone, and house ID assignments made in the Ambientika app from taking effect.
+- **Cloud sync**: house ID was parsed from the wrong byte offset (byte 11 instead of byte 12). Byte 11 is a fixed `0x00` padding byte; the house ID occupies bytes 12–15 (uint32 little-endian).
+
+### Version 1.1.8 - Remove zone_count config option
+
+#### Changed
+- **Removed `zone_count` config option**: the add-on now always listens on all 16 possible UDP broadcast ports (45000–45015), covering every zone index the protocol supports (4-bit field, values 0–15). This eliminates a common misconfiguration where users with zones numbered 1–N needed to set `zone_count` to N+1 due to the 0-based port offset.
+
+### Version 1.1.7 - CI fix: switch to Node 24 and npm install
+
+#### Fixed
+- **CI**: switched Docker base image and CI test runner from Node 22 to Node 24 to match local development environment. Switched CI test install from `npm ci` to `npm install --ignore-scripts` to avoid lock file sync errors caused by npm version differences across environments.
+
+### Version 1.1.6 - Slave zone propagation, device role sensor, dependency cleanup
+
+#### Added
+- **Slave zone propagation**: all devices sharing the same source IP as their master (master + slaves in a zone) now correctly receive the zone cached from UDP broadcasts. Previously only the master got the zone; slaves were left blank.
+- **Device role sensor**: each device now reports its role (`MASTER`, `SLAVE_EQUAL_MASTER`, `SLAVE_OPPOSITE_MASTER`) as a dedicated Home Assistant sensor, making it easy to see zone membership at a glance alongside zone and house ID.
+
+#### Fixed / Improved
+- **Dependency cleanup**: upgraded `sqlite3` from v5 to v6 (drops node-gyp, uses prebuilt binaries — eliminates most npm deprecation warnings during Docker build). Moved `node-ble` to devDependencies since it is only used by the BLE provisioning script, not the main add-on.
+- **CI**: updated `actions/checkout` and `actions/setup-node` to versions with native Node.js 24 support, eliminating the "Node.js 20 deprecated" CI warning.
+
+### Version 1.1.5 - Slave device roles, zone and house ID sensors
+
+#### Added
+- **Zone sensor**: each device now reports its zone index as a Home Assistant sensor (`zone`), sourced from UDP broadcast packets. The zone value is cached per device and published whenever the device state is updated.
+- **House ID sensor**: each device now reports its house ID as a Home Assistant sensor (`house_id`). The value is cached from device setup events — either when a setup command is issued from HA, or when the cloud relay intercepts a setup packet from the Ambientika cloud (requires `cloud_sync_enabled=true`).
+- **Slave device preset/fan status**: slave devices (`SLAVE_OPPOSITE_MASTER`, `SLAVE_EQUAL_MASTER`) now publish their device role string as both preset mode and fan status in Home Assistant, replacing the alternating real-time direction values which were confusing in dashboards.
+
+### Version 1.1.4 - Fix cloud sync spurious warnings
+
+#### Fixed
+- **Cloud sync**: data arriving on inbound connections from the cloud host was being relayed back to the cloud relay listener, producing repeated `REMOTE_SOCKET_DISCONNECTED` events and `Cloud socket not found` warnings for every device status update. Inbound data from the cloud host IP is now ignored by the relay, matching the same guard applied to connection events in v1.1.3.
+
+### Version 1.1.3 - Fix cloud sync connection loop
+
+#### Fixed
+- **Cloud sync**: when `cloud_sync_enabled=true`, the cloud server was connecting back to the local TCP port, triggering `LOCAL_SOCKET_CONNECTED` for the cloud host IP. This caused `RemoteSocketService` to open additional outbound connections to the cloud for each inbound cloud connection, creating a runaway feedback loop of hundreds of orphaned sockets within seconds of startup. The fix ignores `LOCAL_SOCKET_CONNECTED` events originating from the configured cloud host.
+
 ### Version 1.1.1 - NIGHT Fan Speed
 
 #### Fixed

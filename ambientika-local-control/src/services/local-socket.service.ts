@@ -34,11 +34,16 @@ export class LocalSocketService {
     }
 
     private initConnectionListener(serverSocket: Socket): void {
+        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
+        const isCloudConnection = serverSocket.remoteAddress === cloudHost;
+
         if (serverSocket.remoteAddress && serverSocket.remotePort) {
             const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
             this.clients.set(connectionKey, serverSocket)
             this.log.info(`Device connected: ${connectionKey}`);
-            this.eventService.localSocketConnected(serverSocket.remoteAddress);
+            if (!isCloudConnection) {
+                this.eventService.localSocketConnected(serverSocket.remoteAddress);
+            }
         }
 
         serverSocket.on('close', () => {
@@ -88,6 +93,27 @@ export class LocalSocketService {
 
         serverSocket.on('data', (data: Buffer) => {
             this.log.silly('Received data on local socket %o', data);
+
+            if (isCloudConnection) {
+                // Cloud is sending commands/setup to us — route to the target device by serial
+                if (data.length >= 8) {
+                    const serialHex = data.slice(2, 8).toString('hex');
+                    const connectionKey = this.deviceConnections.get(serialHex);
+                    if (connectionKey) {
+                        const client = this.clients.get(connectionKey);
+                        if (client) {
+                            this.log.debug(`Routing cloud→device command for ${serialHex} via ${connectionKey}: ${data.toString('hex')}`);
+                            client.write(data);
+                        } else {
+                            this.log.warn(`No socket found for device ${serialHex} (connection ${connectionKey})`);
+                        }
+                    } else {
+                        this.log.warn(`No connection mapping for device ${serialHex} to route cloud command`);
+                    }
+                }
+                return;
+            }
+
             if (serverSocket.remoteAddress) {
                 this.eventService.localSocketDataUpdateReceived(data, serverSocket.remoteAddress);
             }
@@ -95,7 +121,7 @@ export class LocalSocketService {
                 const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
                 const deviceInfo = this.deviceMapper.deviceInformationFromSocketBuffer(data);
                 this.log.debug('Created device info from data %o', deviceInfo);
-                
+
                 // Map device serial number to connection key for command routing
                 this.deviceConnections.set(deviceInfo.serialNumber, connectionKey);
                 this.log.debug(`Mapped device ${deviceInfo.serialNumber} to connection ${connectionKey}`);
@@ -105,11 +131,11 @@ export class LocalSocketService {
                 const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
                 const device = this.deviceMapper.deviceFromSocketBuffer(data, remoteAddress);
                 this.log.info(`Device status: ${device.serialNumber} [${device.deviceRole}] → ${device.operatingMode} (${device.fanSpeed})`);
-                
+
                 // Map device serial number to connection key for command routing
                 this.deviceConnections.set(device.serialNumber, connectionKey);
                 this.log.debug(`Mapped device ${device.serialNumber} to connection ${connectionKey}`);
-                
+
                 this.eventService.deviceStatusUpdate(device);
             }
         });

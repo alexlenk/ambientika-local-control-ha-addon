@@ -50,27 +50,20 @@ describe('UDPBroadcastService', () => {
     });
 
     describe('initialization', () => {
-        it('creates one socket per zone (ZONE_COUNT=1)', async () => {
+        it('always creates 16 sockets to cover all possible zone indices (0–15)', async () => {
             new UDPBroadcastService(mockLog, eventService);
 
             const dgram = await import('node:dgram');
-            expect(dgram.createSocket).toHaveBeenCalledTimes(1);
+            expect(dgram.createSocket).toHaveBeenCalledTimes(16);
             expect(dgram.createSocket).toHaveBeenCalledWith('udp4');
         });
 
-        it('creates two sockets when ZONE_COUNT=2', async () => {
-            process.env.ZONE_COUNT = '2';
-            new UDPBroadcastService(mockLog, eventService);
-
-            const dgram = await import('node:dgram');
-            expect(dgram.createSocket).toHaveBeenCalledTimes(2);
-        });
-
-        it('binds socket to the configured start port', () => {
+        it('binds sockets starting at the configured start port', () => {
             process.env.UDP_BROADCAST_LISTENER_START_PORT = '45000';
             new UDPBroadcastService(mockLog, eventService);
 
             expect(mockUdpSocket.bind).toHaveBeenCalledWith(45000);
+            expect(mockUdpSocket.bind).toHaveBeenCalledWith(45015);
         });
 
         it('registers message and listening event handlers', () => {
@@ -98,12 +91,34 @@ describe('UDPBroadcastService', () => {
             expect(map.get('192.168.1.100')).toBe('aabbccddeeff');
         });
 
-        it('removes IP mapping when LOCAL_SOCKET_DISCONNECTED fires', () => {
+        it('tracks all serials per IP when multiple devices share an IP', () => {
             const service = new UDPBroadcastService(mockLog, eventService);
-            const device = makeDevice('aabbccddeeff', '192.168.1.100');
+            eventService.deviceStatusUpdate(makeDevice('aabbccddeeff', '192.168.1.100:54321'));
+            eventService.deviceStatusUpdate(makeDevice('112233445566', '192.168.1.100:54322'));
+
+            const allSerials = (service as any).ipToAllSerials;
+            expect(allSerials.get('192.168.1.100').has('aabbccddeeff')).toBe(true);
+            expect(allSerials.get('192.168.1.100').has('112233445566')).toBe(true);
+        });
+
+        it('removes exact serial from IP set when LOCAL_SOCKET_DISCONNECTED fires', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+            eventService.deviceStatusUpdate(makeDevice('aabbccddeeff', '192.168.1.100:54321'));
+            eventService.deviceStatusUpdate(makeDevice('112233445566', '192.168.1.100:54322'));
+
+            eventService.localSocketDisconnected('192.168.1.100:54321');
+
+            const allSerials = (service as any).ipToAllSerials;
+            expect(allSerials.get('192.168.1.100').has('aabbccddeeff')).toBe(false);
+            expect(allSerials.get('192.168.1.100').has('112233445566')).toBe(true);
+        });
+
+        it('removes IP mapping entirely when last device at that IP disconnects', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+            const device = makeDevice('aabbccddeeff', '192.168.1.100:54321');
             eventService.deviceStatusUpdate(device);
 
-            eventService.localSocketDisconnected('192.168.1.100');
+            eventService.localSocketDisconnected('192.168.1.100:54321');
 
             const map = (service as any).localAddressesSerialNumbers;
             expect(map.has('192.168.1.100')).toBe(false);
@@ -156,7 +171,7 @@ describe('UDPBroadcastService', () => {
             expect(listener).toHaveBeenCalledOnce();
         });
 
-        it('multiple devices: stores separate IP → serial mappings', () => {
+        it('multiple devices at different IPs: stores separate IP → serial mappings', () => {
             const service = new UDPBroadcastService(mockLog, eventService);
 
             eventService.deviceStatusUpdate(makeDevice('aabbccddeeff', '192.168.1.100'));
@@ -165,6 +180,22 @@ describe('UDPBroadcastService', () => {
             const map = (service as any).localAddressesSerialNumbers;
             expect(map.get('192.168.1.100')).toBe('aabbccddeeff');
             expect(map.get('192.168.1.101')).toBe('112233445566');
+        });
+
+        it('UDP broadcast includes allSerialNumbers for all devices at that IP', () => {
+            new UDPBroadcastService(mockLog, eventService);
+            eventService.deviceStatusUpdate(makeDevice('aabbccddeeff', '192.168.1.100:54321'));
+            eventService.deviceStatusUpdate(makeDevice('112233445566', '192.168.1.100:54322'));
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED, listener);
+
+            const remoteInfo = { address: '192.168.1.100', port: 45000 };
+            udpHandlers['message']?.(makeUdpBuffer(), remoteInfo);
+
+            const broadcastStatus = listener.mock.calls[0][0];
+            expect(broadcastStatus.allSerialNumbers).toContain('aabbccddeeff');
+            expect(broadcastStatus.allSerialNumbers).toContain('112233445566');
         });
     });
 
@@ -182,17 +213,14 @@ describe('UDPBroadcastService', () => {
             expect(map.size).toBe(0);
         });
 
-        it('strips port from IP if present in localSocketDisconnected', () => {
+        it('strips port from IP in localSocketDisconnected and removes the correct serial', () => {
             const service = new UDPBroadcastService(mockLog, eventService);
-            const device = makeDevice('aabbccddeeff', '192.168.1.100');
+            const device = makeDevice('aabbccddeeff', '192.168.1.100:12345');
             eventService.deviceStatusUpdate(device);
 
-            // Disconnect with IP:port format (service should strip port)
             eventService.localSocketDisconnected('192.168.1.100:12345');
 
             const map = (service as any).localAddressesSerialNumbers;
-            // The service does ip.split(':')[0] — this may or may not match '192.168.1.100'
-            // With '192.168.1.100:12345'.split(':')[0] = '192.168.1.100' → should match
             expect(map.has('192.168.1.100')).toBe(false);
         });
     });

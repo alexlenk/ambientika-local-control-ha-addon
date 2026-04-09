@@ -48,9 +48,9 @@ function make13ByteBuffer(commandType = 1): Buffer {
     return buf;
 }
 
-// 15-byte device setup buffer
-function make15ByteBuffer(): Buffer {
-    const buf = Buffer.alloc(15);
+// 16-byte device setup buffer
+function make16ByteBuffer(): Buffer {
+    const buf = Buffer.alloc(16);
     buf[2] = 0xaa; buf[3] = 0xbb; buf[4] = 0xcc;
     buf[5] = 0xdd; buf[6] = 0xee; buf[7] = 0xff;
     return buf;
@@ -102,6 +102,14 @@ describe('RemoteSocketService', () => {
             expect(mockRemoteSocket.connect).toHaveBeenCalledWith(11000, '185.214.203.87');
         });
 
+        it('does not open a cloud connection when the cloud host itself connects locally', async () => {
+            eventService.localSocketConnected('185.214.203.87');
+
+            const net = await import('node:net');
+            expect(net.Socket).not.toHaveBeenCalled();
+            expect(mockRemoteSocket.connect).not.toHaveBeenCalled();
+        });
+
         it('registers connect, close, error, and data handlers on the remote socket', () => {
             eventService.localSocketConnected('192.168.1.100');
 
@@ -121,7 +129,7 @@ describe('RemoteSocketService', () => {
             expect(listener).toHaveBeenCalledWith('192.168.1.100');
         });
 
-        it('emits remoteSocketDisconnected on "close" event', () => {
+        it('emits remoteSocketDisconnected on "close" event when socket is still active', () => {
             eventService.localSocketConnected('192.168.1.100');
             const listener = vi.fn();
             eventService.on(AppEvents.REMOTE_SOCKET_DISCONNECTED, listener);
@@ -129,6 +137,24 @@ describe('RemoteSocketService', () => {
             remoteSocketHandlers['close']?.();
 
             expect(listener).toHaveBeenCalledWith('192.168.1.100');
+        });
+
+        it('does not emit remoteSocketDisconnected on "close" if socket was replaced (orphan guard)', () => {
+            const svc = new RemoteSocketService(mockLog, eventService);
+            eventService.localSocketConnected('192.168.1.100');
+            // Capture the close handler registered for the first socket
+            const firstCloseHandler = remoteSocketHandlers['close'];
+
+            // Simulate reconnect: second LOCAL_SOCKET_CONNECTED replaces the client in the map
+            (svc as any).clients.set('192.168.1.100', {} as any); // different socket object
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.REMOTE_SOCKET_DISCONNECTED, listener);
+
+            // Old socket closes — guard should prevent cleanup of the new entry
+            firstCloseHandler?.();
+
+            expect(listener).not.toHaveBeenCalled();
         });
 
         describe('data handling', () => {
@@ -145,11 +171,11 @@ describe('RemoteSocketService', () => {
                 expect(listener).toHaveBeenCalled();
             });
 
-            it('emits deviceSetupUpdate for 15-byte data', () => {
+            it('emits deviceSetupUpdate for 16-byte data', () => {
                 const listener = vi.fn();
                 eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
 
-                remoteSocketHandlers['data']?.(make15ByteBuffer());
+                remoteSocketHandlers['data']?.(make16ByteBuffer());
 
                 expect(listener).toHaveBeenCalled();
             });
@@ -227,7 +253,7 @@ describe('RemoteSocketService', () => {
 
                 (svc as any).write(data, '192.168.1.200');
 
-                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data);
+                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data, expect.any(Function));
             });
 
             it('emits remoteSocketConnected when writing to existing client', () => {
@@ -257,7 +283,17 @@ describe('RemoteSocketService', () => {
                 // Simulate the event that initEventListener listens to
                 eventService.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, data, '192.168.1.99');
 
-                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data);
+                expect(mockRemoteSocket.write).toHaveBeenCalledWith(data, expect.any(Function));
+            });
+
+            it('does not relay LOCAL_SOCKET_DATA_UPDATE_RECEIVED from the cloud host', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('185.214.203.87', mockRemoteSocket);
+
+                const data = Buffer.from([0x01, 0x02, 0x03]);
+                eventService.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, data, '185.214.203.87');
+
+                expect(mockRemoteSocket.write).not.toHaveBeenCalled();
             });
         });
     });

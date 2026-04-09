@@ -12,6 +12,8 @@ dotenv.config();
 export class UDPBroadcastService {
 
     private localAddressesSerialNumbers: Map<string, string> = new Map();
+    private ipToAllSerials: Map<string, Set<string>> = new Map();
+    private ipPortToSerial: Map<string, string> = new Map();
     private listener: Map<number, Socket> = new Map();
     private deviceMapper: DeviceMapper;
 
@@ -25,23 +27,21 @@ export class UDPBroadcastService {
     private initialize(): void {
         this.log.debug('Initializing UDPBroadcastService');
         this.initEventListener();
-        const zoneCount = parseInt(process.env.ZONE_COUNT || '1');
-        let listenerPort = parseInt(process.env.UDP_BROADCAST_LISTENER_START_PORT || '45000');
-        let zoneIndex = 0;
-        while (zoneIndex < zoneCount) {
-            this.initListener(zoneIndex, listenerPort);
-            zoneIndex++;
-            listenerPort++;
+        const startPort = parseInt(process.env.UDP_BROADCAST_LISTENER_START_PORT || '45000');
+        // Zone index is 4 bits (0–15) in the protocol, so open all 16 possible ports
+        for (let zoneIndex = 0; zoneIndex < 16; zoneIndex++) {
+            this.initListener(zoneIndex, startPort + zoneIndex);
         }
     }
 
     private initListener(zoneIndex: number, listenerPort: number): void {
         const socket = createSocket('udp4');
         socket.on('message', (data: Buffer, remoteInfo: RemoteInfo) => {
-            this.log.silly(`Received data on udp socket ${listenerPort} for 
+            this.log.silly(`Received data on udp socket ${listenerPort} for
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
             const serialNumber = this.localAddressesSerialNumbers.get(remoteInfo.address);
-            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber);
+            const allSerialNumbers = Array.from(this.ipToAllSerials.get(remoteInfo.address) || []);
+            const deviceStatus = this.deviceMapper.deviceStatusBroadCastFromBuffer(data, serialNumber, allSerialNumbers);
             this.log.silly('Created device status broadcast from data %o', deviceStatus);
             this.eventService.deviceBroadcastStatus(deviceStatus);
         });
@@ -61,12 +61,34 @@ export class UDPBroadcastService {
             // Store by IP address only (without port) to match UDP broadcast source addresses
             const deviceIp = device.remoteAddress.split(':')[0];
             this.localAddressesSerialNumbers.set(deviceIp, device.serialNumber);
+            // Track all serials per IP for zone propagation to slaves
+            if (!this.ipToAllSerials.has(deviceIp)) {
+                this.ipToAllSerials.set(deviceIp, new Set());
+            }
+            this.ipToAllSerials.get(deviceIp)!.add(device.serialNumber);
+            // Track IP:port → serial for accurate disconnect cleanup
+            this.ipPortToSerial.set(device.remoteAddress, device.serialNumber);
         });
         this.eventService.on(AppEvents.LOCAL_SOCKET_DISCONNECTED, (localAddress: string) => {
-            // Convert IP:port to IP for lookup
             const ip = localAddress.split(':')[0];
-            if (this.localAddressesSerialNumbers.has(ip)) {
+            const serial = this.ipPortToSerial.get(localAddress);
+            if (serial) {
+                this.ipPortToSerial.delete(localAddress);
+                const serials = this.ipToAllSerials.get(ip);
+                if (serials) {
+                    serials.delete(serial);
+                    if (serials.size === 0) {
+                        this.ipToAllSerials.delete(ip);
+                        this.localAddressesSerialNumbers.delete(ip);
+                    } else {
+                        // Update the primary serial to one still connected
+                        this.localAddressesSerialNumbers.set(ip, serials.values().next().value!);
+                    }
+                }
+            } else if (this.localAddressesSerialNumbers.has(ip)) {
+                // Fallback: IP-only disconnect (no port tracking hit)
                 this.localAddressesSerialNumbers.delete(ip);
+                this.ipToAllSerials.delete(ip);
             }
         });
     }

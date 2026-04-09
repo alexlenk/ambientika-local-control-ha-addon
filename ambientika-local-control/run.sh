@@ -32,7 +32,6 @@ MQTT_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_host // "core-mosquitt
 MQTT_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_port // 1883')
 MQTT_USERNAME=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_username // ""')
 MQTT_PASSWORD=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_password // ""')
-ZONE_COUNT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.zone_count // 3')
 CLOUD_SYNC_ENABLED=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_sync_enabled // false')
 CLOUD_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_host // "185.214.203.87"')
 CLOUD_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_port // 11000')
@@ -44,7 +43,6 @@ LOG_LEVEL=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_level // "info"')
 
 log_info "🔧 Configuration loaded:"
 log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
-log_info "  Zones: $ZONE_COUNT"
 log_info "  Local Socket: $LOCAL_SOCKET_PORT"
 log_info "  REST API: $REST_API_PORT"
 log_info "  Log Level: $LOG_LEVEL"
@@ -65,8 +63,6 @@ LOG_LEVEL=${LOG_LEVEL}
 CLOUD_SYNC_ENABLED=${CLOUD_SYNC_ENABLED}
 REMOTE_CLOUD_SOCKET_PORT=${CLOUD_PORT}
 REMOTE_CLOUD_HOST=${CLOUD_HOST}
-
-ZONE_COUNT=${ZONE_COUNT}
 
 UDP_BROADCAST_LISTENER_START_PORT=${UDP_BROADCAST_START_PORT}
 
@@ -89,7 +85,7 @@ HOME_ASSISTANT_SELECT_DISCOVERY_TOPIC=homeassistant/select/%serialNumber/%sensor
 HOME_ASSISTANT_BUTTON_DISCOVERY_TOPIC=homeassistant/button/%serialNumber/%sensorId/config
 
 HOME_ASSISTANT_DEVICE_NAME_PREFIX=Ambientika
-HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES="SMART,AUTO,MANUAL_HEAT_RECOVERY,NIGHT,AWAY_HOME,SURVEILLANCE,TIMED_EXPULSION,EXPULSION,INTAKE,MASTER_SLAVE_FLOW,SLAVE_MASTER_FLOW,OFF"
+HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES="SMART,AUTO,MANUAL_HEAT_RECOVERY,NIGHT,AWAY_HOME,SURVEILLANCE,TIMED_EXPULSION,EXPULSION,INTAKE,MASTER_SLAVE_FLOW,SLAVE_MASTER_FLOW,OFF,SLAVE_OPPOSITE_MASTER,SLAVE_EQUAL_MASTER"
 
 AVAILABILITY_TOPIC=ambientika/%serialNumber/availability
 CLOUD_AVAILABILITY_TOPIC=ambientika/%serialNumber/cloud_availability
@@ -111,6 +107,9 @@ FILTER_STATUS_TOPIC=ambientika/%serialNumber/filter_status
 FILTER_RESET_TOPIC=ambientika/%serialNumber/filter_reset
 FAN_STATUS_TOPIC=ambientika/%serialNumber/fan_status
 FAN_MODE_TOPIC=ambientika/%serialNumber/fan_mode
+DEVICE_ZONE_TOPIC=ambientika/%serialNumber/zone
+HOUSE_ID_TOPIC=ambientika/%serialNumber/house_id
+DEVICE_ROLE_TOPIC=ambientika/%serialNumber/device_role
 NIGHT_ALARM_TOPIC=ambientika/%serialNumber/night_alarm
 LIGHT_SENSITIVITY_TOPIC=ambientika/%serialNumber/light_sensitivity
 LIGHT_SENSITIVITY_COMMAND_TOPIC=ambientika/%serialNumber/light_sensitivity/set
@@ -123,7 +122,6 @@ EOF
 # Log configuration
 log_info "📊 Final configuration:"
 log_info "  MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
-log_info "  Zone Count: ${ZONE_COUNT}"
 log_info "  Cloud Sync: ${CLOUD_SYNC_ENABLED}"
 log_info "  Database: /data/devices.db"
 log_info "  .env file created successfully"

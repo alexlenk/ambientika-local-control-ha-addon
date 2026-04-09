@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.12 - Debug: substitute cloud packets with known-working templates
+
+#### Changed
+- **Cloud sync debug**: firmware and status packets forwarded to the cloud are now replaced with known-working byte templates (from bring-online.ts) with the real device MAC injected at runtime. Tests whether the proxy connection itself is the issue rather than subtle differences in the forwarded bytes.
+- Both incoming and outgoing hex are logged at silly level for each packet.
+
+---
+
+### Version 1.1.11 - Fix orphaned cloud socket, 15-byte setup, cloud debug logging
+
+#### Fixed
+- **Cloud sync**: when a device reconnected, the old cloud socket was left open but removed from the active map. When it eventually closed, its `close` handler deleted the *new* socket entry for the same IP — silently breaking cloud forwarding until the next add-on restart. Fixed by guarding the close handler with an identity check (`clients.get(ip) === thisSocket`).
+- **Cloud sync**: cloud-initiated setup packets (15 bytes) were silently dropped because the parser only accepted 16-byte proxy-injected setups. Both lengths are now accepted; `houseId` is read from offset 11 for 15-byte and offset 12 for 16-byte packets.
+
+#### Added
+- **Cloud sync debug logging** (silly level): every raw packet forwarded to the cloud is now hex-logged before write and confirmed after kernel flush, making it possible to verify exactly what the proxy is sending.
+- **Debug REST endpoint** `POST /cloud/send-setup/:serialNumber` — injects a 16-byte setup packet into the cloud relay for a device.
+
+---
+
+### Version 1.1.3 - Fix cloud sync connection loop
+
+#### Fixed
+- **Cloud sync**: when `cloud_sync_enabled=true`, the cloud server was connecting back to the local TCP port, triggering `LOCAL_SOCKET_CONNECTED` for the cloud host IP. This caused `RemoteSocketService` to open additional outbound connections to the cloud for each inbound cloud connection, creating a runaway feedback loop of hundreds of orphaned sockets within seconds of startup. The fix ignores `LOCAL_SOCKET_CONNECTED` events originating from the configured cloud host.
+
+---
+
 ### Version 1.1.1 - NIGHT Fan Speed
 
 #### Fixed
