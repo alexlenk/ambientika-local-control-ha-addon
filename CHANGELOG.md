@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.12 - Debug: substitute cloud packets with known-working templates
+
+#### Changed
+- **Cloud sync debug**: firmware and status packets forwarded to the cloud are now replaced with known-working byte templates (from bring-online.ts) with the real device MAC injected at runtime. Tests whether the proxy connection itself is the issue rather than subtle differences in the forwarded bytes.
+- Both incoming and outgoing hex are logged at silly level for each packet.
+
+---
+
 ### Version 1.1.11 - Fix orphaned cloud socket, 15-byte setup, cloud debug logging
 
 #### Fixed
