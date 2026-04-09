@@ -113,61 +113,20 @@ export class RemoteSocketService {
         });
     }
 
-    // DEBUG: use exact packet templates from bring-online.ts with the real device
-    // MAC (bytes 2–7) swapped in at runtime. Placeholder MACs in templates are
-    // overwritten — never stored in source. Remove once root cause is confirmed.
-    private static readonly DEBUG_TEMPLATES: Record<string, { firmware: Buffer; status: Buffer }> = {
-        // OUI 88:13:BF family — placeholder MAC 000000000000, overwritten at runtime
-        '88': {
-            firmware: Buffer.from('030000000000000001010901010902010000', 'hex'),
-            status:   Buffer.from('0100000000000000000201161703000000000002cd', 'hex'),
-        },
-        // OUI 48:31:B7 family — placeholder MAC 000000000000, overwritten at runtime
-        '48': {
-            firmware: Buffer.from('030000000000000001010c01010c02040200', 'hex'),
-            status:   Buffer.from('0100000000000000000101151a00000200020102c5', 'hex'),
-        },
-    };
-
-    private debugBuildPacket(data: Buffer): Buffer {
-        const mac = data.slice(2, 8);
-        const ouiKey = mac[0].toString(16).padStart(2, '0');
-        const templates = RemoteSocketService.DEBUG_TEMPLATES[ouiKey];
-        if (!templates) { return data; }
-
-        if (data.length === 18 && data[0] === 0x03) {
-            const out = Buffer.from(templates.firmware);
-            mac.copy(out, 2);
-            return out;
-        }
-        if (data.length === 21 && data[0] === 0x01) {
-            const out = Buffer.from(templates.status);
-            mac.copy(out, 2);
-            return out;
-        }
-        return data;
-    }
-
     write(data: Buffer, localAddress: string): void {
         const client: Socket | undefined = this.clients.get(localAddress);
         if (client) {
             this.eventService.remoteSocketConnected(localAddress);
-
-            const isDebugPacket = (data.length === 18 && data[0] === 0x03) || (data.length === 21 && data[0] === 0x01);
-            const payload = isDebugPacket ? this.debugBuildPacket(data) : data;
-
-            this.log.silly(`→ cloud [${localAddress}] in  ${data.length}b: ${data.toString('hex')}`);
-            this.log.silly(`→ cloud [${localAddress}] out ${payload.length}b: ${payload.toString('hex')}`);
-
-            const flushed = client.write(payload, (err) => {
+            this.log.silly(`→ cloud [${localAddress}] ${data.length}b: ${data.toString('hex')}`);
+            const flushed = client.write(data, (err) => {
                 if (err) {
                     this.log.warn(`TCP write error for ${localAddress}: ${err.message}`);
                 } else {
-                    this.log.silly(`✓ cloud [${localAddress}] ${payload.length}b flushed to kernel`);
+                    this.log.silly(`✓ cloud [${localAddress}] ${data.length}b flushed to kernel`);
                 }
             });
             if (!flushed) {
-                this.log.warn(`TCP send buffer full for ${localAddress} — backpressure on ${payload.length}b write`);
+                this.log.warn(`TCP send buffer full for ${localAddress} — backpressure on ${data.length}b write`);
             }
         } else {
             this.eventService.remoteSocketDisconnected(localAddress);
