@@ -1,5 +1,15 @@
 # Changelog
 
+### Version 1.1.11 - Fix orphaned cloud socket, 15-byte setup, cloud debug logging
+
+#### Fixed
+- **Cloud sync**: when a device reconnected, the old cloud socket was left open but removed from the active map. When it eventually closed, its `close` handler deleted the *new* socket entry for the same IP — silently breaking cloud forwarding until the next add-on restart. Fixed by guarding the close handler with an identity check (`clients.get(ip) === thisSocket`).
+- **Cloud sync**: cloud-initiated setup packets (15 bytes) were silently dropped because the parser only accepted 16-byte proxy-injected setups. Both lengths are now accepted; `houseId` is read from offset 11 for 15-byte and offset 12 for 16-byte packets.
+
+#### Added
+- **Cloud sync debug logging** (silly level): every raw packet forwarded to the cloud is now hex-logged before write (`→ cloud [ip] Nb: <hex>`) and confirmed after kernel flush (`✓ cloud [ip] Nb flushed to kernel`), making it possible to verify exactly what the proxy is sending and that TCP accepted it.
+- **Debug REST endpoint** `POST /cloud/send-setup/:serialNumber` — injects a 16-byte setup packet into the cloud relay for a device without going through the Ambientika app. Useful for diagnosing cloud sync role/zone assignment.
+
 ### Version 1.1.10 - Fix cloud inbound connection routing
 
 #### Fixed

@@ -94,7 +94,11 @@ export class DeviceMapper {
         }
         const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
         const zoneIndex = this.getIntFromBufferSlice(10, 11);
-        const houseId = this.getUInt32LEFromBufferSlice(12, 16);
+        // Cloud sends 15-byte setup (no padding at byte 11; houseId at 11–14).
+        // Proxy-injected setups are 16 bytes (padding at byte 11; houseId at 12–15).
+        const houseId = data.length === 15
+            ? this.getUInt32LEFromBufferSlice(11, 15)
+            : this.getUInt32LEFromBufferSlice(12, 16);
         return new DeviceSetup(serialNumber, finalDeviceRole, zoneIndex, houseId);
     }
 

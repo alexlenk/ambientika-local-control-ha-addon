@@ -37,13 +37,17 @@ export class RemoteSocketService {
             this.log.debug("connection to cloud connecting");
         });
         remoteSocket.on('connect', () => {
-            this.log.debug("connection to cloud established");
+            this.log.debug(`connection to cloud established for ${localAddress} (local port ${remoteSocket.localPort})`);
             this.eventService.remoteSocketConnected(localAddress);
         });
         remoteSocket.on('close', () => {
-            this.log.debug("connection to cloud closed");
-            this.eventService.remoteSocketDisconnected(localAddress);
-            this.clients.delete(localAddress);
+            this.log.debug(`connection to cloud closed for ${localAddress}`);
+            // Only clean up if this socket is still the active one — prevents an
+            // orphaned socket's close event from deleting a newer socket for the same IP.
+            if (this.clients.get(localAddress) === remoteSocket) {
+                this.eventService.remoteSocketDisconnected(localAddress);
+                this.clients.delete(localAddress);
+            }
         });
         remoteSocket.on('error', (error: Error) => {
             this.log.warn(`Remote socket error for ${localAddress}: ${error.message}`);
@@ -113,7 +117,17 @@ export class RemoteSocketService {
         const client: Socket | undefined = this.clients.get(localAddress);
         if (client) {
             this.eventService.remoteSocketConnected(localAddress);
-            client.write(data);
+            this.log.silly(`→ cloud [${localAddress}] ${data.length}b: ${data.toString('hex')}`);
+            const flushed = client.write(data, (err) => {
+                if (err) {
+                    this.log.warn(`TCP write error for ${localAddress}: ${err.message}`);
+                } else {
+                    this.log.silly(`✓ cloud [${localAddress}] ${data.length}b flushed to kernel`);
+                }
+            });
+            if (!flushed) {
+                this.log.warn(`TCP send buffer full for ${localAddress} — backpressure on ${data.length}b write`);
+            }
         } else {
             this.eventService.remoteSocketDisconnected(localAddress);
             this.log.warn(`Cloud socket for ${localAddress} not found.`);
