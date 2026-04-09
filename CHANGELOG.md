@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.13 - Fix cloud sync: forward real device packets
+
+#### Fixed
+- **Cloud sync**: removed debug packet substitution — device firmware and status bytes are now forwarded to the cloud unchanged. The root cause of devices not appearing online was a local IP binding (`185.214.203.87`) on the HA host that caused the proxy to connect to itself instead of the real cloud.
+
+---
+
 ### Version 1.1.12 - Debug: substitute cloud packets with known-working templates
 
 #### Changed
