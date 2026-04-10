@@ -58,13 +58,27 @@ jobs:
           git tag "${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
+      - name: Extract changelog for version
+        if: steps.tag_check.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v ver="$VERSION" '
+            /^### Version / {
+              if ($0 ~ ("^### Version " ver "( |$|-)")) { found=1 }
+              else if (found) { exit }
+            }
+            found { print }
+          ' CHANGELOG.md > /tmp/release_notes.md
+          echo "--- Extracted release notes ---"
+          cat /tmp/release_notes.md
+
       - name: Create GitHub Release
         if: steps.tag_check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
+          body_path: /tmp/release_notes.md
           draft: false
           prerelease: false
 

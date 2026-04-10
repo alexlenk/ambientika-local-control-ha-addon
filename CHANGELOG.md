@@ -2,10 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-### Version 1.1.16 - Fix house ID for devices sending left-shifted bytes
+### Version 1.1.17 - Persist zone and house ID across restarts
 
 #### Fixed
-- **House ID sensor**: some devices send the house ID left-shifted by 8 bits in the UDP broadcast (trailing `0x00` instead of leading `0x00`). The mapper now detects this and right-shifts the value, so both encoding variants decode to the correct house ID.
+- **Zone / house ID sensor**: zone and house ID were stored in memory only and lost on every restart. Slave devices (which have their own IP separate from their paired master) would never recover their zone or house ID after restart since only master devices emit UDP broadcasts. Both values are now persisted to SQLite and restored automatically when a device reconnects. Masters recover from the next UDP broadcast and write to DB; slaves recover from the DB on reconnect. A one-time `setup/set` MQTT command is still needed for slaves whose zone was never set.
+
+#### Changed
+- **Release notes**: GitHub release now contains only the section for the released version instead of the full changelog history, so Home Assistant shows the correct update description.
 
 ---
 
