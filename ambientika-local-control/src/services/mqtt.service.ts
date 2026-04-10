@@ -90,6 +90,8 @@ export class MqttService {
         this.eventService.on(AppEvents.DEVICE_SETUP_UPDATE, (deviceSetupDto: DeviceSetupDto) => {
             this.deviceHouseIds.set(deviceSetupDto.serialNumber, deviceSetupDto.houseId);
             this.deviceZones.set(deviceSetupDto.serialNumber, deviceSetupDto.zoneIndex);
+            this.deviceStorageService.saveDeviceZoneHouseId(
+                deviceSetupDto.serialNumber, deviceSetupDto.zoneIndex, deviceSetupDto.houseId);
         });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
@@ -100,6 +102,8 @@ export class MqttService {
                     if (deviceBroadcastStatus.houseId !== undefined) {
                         this.deviceHouseIds.set(sn, deviceBroadcastStatus.houseId);
                     }
+                    this.deviceStorageService.saveDeviceZoneHouseId(
+                        sn, deviceBroadcastStatus.zoneIndex, deviceBroadcastStatus.houseId);
                 }
                 // Fan status/mode published only for the primary serial (master)
                 this.sendFanStatus(deviceBroadcastStatus);
@@ -131,6 +135,10 @@ export class MqttService {
             this.sendDeviceZone(device);
             this.sendDeviceHouseId(device);
             this.sendDeviceRole(device);
+            // If zone/houseId not yet in memory (e.g. after restart), load from DB
+            if (!this.deviceZones.has(device.serialNumber) || !this.deviceHouseIds.has(device.serialNumber)) {
+                this.loadZoneHouseIdFromDb(device);
+            }
         });
     }
 
@@ -337,6 +345,29 @@ export class MqttService {
     private sendLightSensitivity(device: Device) {
         this.publish(this.getDevicePublishTopic(process.env.LIGHT_SENSITIVITY_TOPIC, device.serialNumber),
             device.lightSensitivity.toString())
+    }
+
+    private loadZoneHouseIdFromDb(device: Device): void {
+        this.deviceStorageService.findExistingDeviceBySerialNumber(device.serialNumber,
+            (dto) => {
+                if (!dto) return;
+                let published = false;
+                if (dto.zone !== undefined && dto.zone !== null && !this.deviceZones.has(device.serialNumber)) {
+                    this.deviceZones.set(device.serialNumber, dto.zone);
+                    this.publish(this.getDevicePublishTopic(process.env.DEVICE_ZONE_TOPIC, device.serialNumber),
+                        dto.zone.toString());
+                    published = true;
+                }
+                if (dto.houseId !== undefined && dto.houseId !== null && !this.deviceHouseIds.has(device.serialNumber)) {
+                    this.deviceHouseIds.set(device.serialNumber, dto.houseId);
+                    this.publish(this.getDevicePublishTopic(process.env.HOUSE_ID_TOPIC, device.serialNumber),
+                        dto.houseId.toString());
+                    published = true;
+                }
+                if (published) {
+                    this.log.debug(`Restored zone/houseId from DB for ${device.serialNumber}: zone=${dto.zone}, houseId=${dto.houseId}`);
+                }
+            });
     }
 
     private sendDeviceZone(device: Device) {

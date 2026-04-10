@@ -28,7 +28,9 @@ export class DeviceStorageService {
     createDbConnection() {
         const filepath = process.env.DEVICE_DB || 'devices.db';
         if (fs.existsSync(filepath)) {
-            return new sqlite3.Database(filepath);
+            const db = new sqlite3.Database(filepath);
+            this.migrateDb(db);
+            return db;
         } else {
             const db = new sqlite3.Database(filepath, (error) => {
                 if (error) {
@@ -39,6 +41,12 @@ export class DeviceStorageService {
             this.log.info("Connection with SQLite has been established");
             return db;
         }
+    }
+
+    private migrateDb(db: Database): void {
+        // Add zone/houseId columns if they don't exist (safe to run on every startup)
+        db.run('ALTER TABLE devices ADD COLUMN zone INTEGER DEFAULT NULL', () => {});
+        db.run('ALTER TABLE devices ADD COLUMN houseId INTEGER DEFAULT NULL', () => {});
     }
 
 
@@ -62,7 +70,9 @@ export class DeviceStorageService {
                 lightSensitivity  VARCHAR(20) NOT NULL,
                 remoteAddress     VARCHAR(255) DEFAULT NULL,
                 lastUpdate        VARCHAR(255) DEFAULT NULL,
-                firstSeen         VARCHAR(255) DEFAULT NULL
+                firstSeen         VARCHAR(255) DEFAULT NULL,
+                zone              INTEGER DEFAULT NULL,
+                houseId           INTEGER DEFAULT NULL
             );
         `);
     }
@@ -121,6 +131,18 @@ export class DeviceStorageService {
     getStoredFanSpeed(serialNumber: string): string | undefined {
         const command = this.lastSentCommands.get(serialNumber);
         return command?.fanSpeed;
+    }
+
+    saveDeviceZoneHouseId(serialNumber: string, zone: number | undefined, houseId: number | undefined): void {
+        if (zone === undefined && houseId === undefined) return;
+        const updates: string[] = [];
+        const params: Record<string, string | number> = { $serialNumber: serialNumber };
+        if (zone !== undefined) { updates.push('zone = $zone'); params.$zone = zone; }
+        if (houseId !== undefined) { updates.push('houseId = $houseId'); params.$houseId = houseId; }
+        this.db.run(`UPDATE devices SET ${updates.join(', ')} WHERE serialNumber = $serialNumber`, params,
+            (error: Error) => {
+                if (error) this.log.error(`Error saving zone/houseId for ${serialNumber}`, error);
+            });
     }
 
     saveDevice(device: Device) {

@@ -53,6 +53,7 @@ const mockStorage = {
     getStoredOperatingMode: vi.fn().mockReturnValue(undefined),
     getStoredFanSpeed: vi.fn().mockReturnValue(undefined),
     hasStoredCommand: vi.fn().mockReturnValue(false),
+    saveDeviceZoneHouseId: vi.fn(),
 } as any;
 
 describe('MqttService', () => {
