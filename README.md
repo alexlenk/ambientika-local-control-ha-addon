@@ -30,17 +30,18 @@ Based on [ambientika-local-control](https://github.com/sragas/ambientika-local-c
 1. Add this repository to your Home Assistant add-on store
 2. Install the "Ambientika Local Control" add-on
 3. Configure MQTT settings
-4. Provision your devices via BLE (see below)
+4. Configure device routing (BLE provisioning or static route — see below)
 5. Start the add-on
 
 ---
 
-## Device Provisioning (BLE)
+## Device Configuration
 
-Each device must be told to connect to your Home Assistant instance instead of the Ambientika cloud. This is done **once per device** over Bluetooth.
+Devices need to know your Home Assistant IP so they connect to the add-on instead of the Ambientika cloud. There are two ways to achieve this.
 
-Write the following three values to the device's WiFi characteristic
-(Service `0000a002-*`, Characteristic `0000c302-*`):
+### Method 1: BLE Provisioning (Preferred)
+
+Each device is configured once over Bluetooth to connect directly to your HA IP. Write the following three values to the device's WiFi characteristic (Service `0000a002-*`, Characteristic `0000c302-*`):
 
 | Value | Example |
 |-------|---------|
@@ -53,6 +54,31 @@ BLE apps: **LightBlue Explorer** (iOS) or **nRF Connect** (Android/iOS).
 The device appears as `VMC_<MAC>` in BLE scans. After writing, it restarts and connects to the add-on.
 
 Re-provisioning is only needed if your HA IP changes or a device is factory-reset.
+
+### Method 2: Router Static Route (Alternative)
+
+Instead of re-provisioning devices, add a static route in your router that redirects all Ambientika cloud traffic to your HA host:
+
+- **Destination:** `185.214.203.87/32`
+- **Gateway:** your HA IP (e.g. `192.168.1.10`)
+
+Then add a persistent IP alias on the HA host so it accepts packets addressed to the cloud IP. Add to `configuration.yaml`:
+
+```yaml
+shell_command:
+  add_ip_alias: 'ip addr add 185.214.203.87/32 dev end0 || true'
+
+automation:
+  - alias: "Add IP alias on startup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: '00:00:30'
+      - service: shell_command.add_ip_alias
+```
+
+> **Note:** This method redirects the cloud IP for all devices on your network. BLE provisioning is preferred when possible as it is more targeted and does not require router access.
 
 ---
 
