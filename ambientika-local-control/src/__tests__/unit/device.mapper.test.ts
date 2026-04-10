@@ -234,7 +234,7 @@ describe('DeviceMapper', () => {
             expect(result.houseId).toBe(12048);
         });
 
-        it('passes through undefined serialNumber', () => {
+it('passes through undefined serialNumber', () => {
             const buf = Buffer.alloc(4);
             const result = mapper.deviceStatusBroadCastFromBuffer(buf, undefined);
             expect(result.serialNumber).toBeUndefined();

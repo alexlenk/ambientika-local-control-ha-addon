@@ -330,7 +330,9 @@ export class DeviceCommandService {
     }
 
     private getDeviceSetupBufferData(deviceSetupDto: DeviceSetupDto): Buffer {
-        const buffer = Buffer.alloc(16);
+        // 15-byte format matching cloud setup packets:
+        // 02 00 <MAC 6b> 00 <role> <zone> <houseId 4b LE>
+        const buffer = Buffer.alloc(15);
         buffer.writeInt8(0x02);
         buffer.writeInt8(0x00, 1);
 
@@ -344,7 +346,7 @@ export class DeviceCommandService {
             });
         }
 
-        // Unknown fixed byte (byte 8, always 0x00)
+        // Fixed byte (byte 8, always 0x00)
         buffer.writeInt8(0x00, offset);
         offset++;
 
@@ -357,11 +359,7 @@ export class DeviceCommandService {
         buffer.writeInt8(deviceSetupDto.zoneIndex, offset);
         offset++;
 
-        // Unknown fixed byte (byte 11, always 0x00)
-        buffer.writeInt8(0x00, offset);
-        offset++;
-
-        // House ID (4 bytes, little endian)
+        // House ID (4 bytes, little endian) — starts at byte 11, same as cloud format
         buffer.writeUInt32LE(deviceSetupDto.houseId, offset);
 
         return buffer;
