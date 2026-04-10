@@ -5,141 +5,147 @@
 
 ## About
 
-This add-on provides local control for Ambientika devices, allowing you to manage your ventilation system without relying on the cloud service.
+This add-on provides local control for Ambientika ventilation devices, integrating them
+into Home Assistant via MQTT while optionally keeping the official Ambientika cloud app
+working in parallel.
+
+---
 
 ## Installation
 
 1. Add this repository to your Home Assistant add-on store
 2. Install the "Ambientika Local Control" add-on
 3. Configure the add-on (see Configuration section)
-4. Set up device redirection (see Device Configuration section)
+4. Provision your devices (see Device Provisioning section)
 5. Start the add-on
 
-## Device Configuration
+---
 
-**Important:** Before using this add-on, you must redirect your Ambientika devices to connect to your local Home Assistant instead of the cloud.
+## Device Provisioning (BLE)
 
-This add-on supports two methods to redirect device traffic locally. Choose the method that works best for your setup:
+Each device must be told to connect to your Home Assistant instance instead of the
+Ambientika cloud. This is done once per device over Bluetooth (BLE).
 
-## Method 1: Router Static Route (Recommended - More Robust)
+### What provisioning does
 
-This method redirects all Ambientika cloud traffic to your Home Assistant via your router.
+It writes three values into the device:
+- The TCP host to connect to (`H_<HA-IP>:11000`)
+- Your WiFi SSID (`S_<ssid>`)
+- Your WiFi password (`P_<password>`)
 
-### Router Configuration
-Add a static route in your router:
-- **Destination:** `185.214.203.87/32`
-- **Gateway:** `[YOUR_HA_IP]` (replace with your Home Assistant IP address)
+### Steps
 
-### Home Assistant IP Alias
-Add to your `configuration.yaml`:
-```yaml
-shell_command:
-  add_ip_alias: 'ip addr add 185.214.203.87/32 dev end0 || true'
-```
-
-Add this automation:
-```yaml
-automation:
-  - alias: "Add IP Alias for Local Control"
-    trigger:
-      - platform: homeassistant
-        event: start
-    action:
-      - delay: '00:00:30'
-      - service: shell_command.add_ip_alias
-    mode: single
-```
-
-Restart Home Assistant after adding this configuration.
-
-## Method 2: BLE Device Provisioning
-
-This method reconfigures devices to connect directly to your Home Assistant IP address.
-
-### Prerequisites
-Download a BLE app:
-- **iOS:** "LightBlue Explorer" 
-- **Android:** "nRF Connect for Mobile"
-
-### Provisioning Steps
-1. Put your device in pairing mode and scan for BLE devices
-2. Connect to your device (appears as `VMC_ABCDEFABCDEF`)
-3. Navigate to the WiFi service:
+1. Put the device in pairing mode
+2. Scan for BLE devices — it appears as `VMC_<MAC>`
+3. Connect and navigate to:
    - Service UUID: `0000a002-*`
    - Characteristic UUID: `0000c302-*`
-4. Write these three values to the characteristic:
-   - `H_<YOUR_HA_IP>:11000` (replace with your Home Assistant IP address)
-   - `S_<YOUR_WIFI_SSID>` (your WiFi network name)
-   - `P_<YOUR_WIFI_PASSWORD>` (your WiFi password)
-5. The device will restart and connect to your local setup
+4. Write the following values to the characteristic (one at a time):
+   - `H_<YOUR_HA_IP>:11000`
+   - `S_<YOUR_WIFI_SSID>`
+   - `P_<YOUR_WIFI_PASSWORD>`
+5. The device restarts and connects to the add-on
 
-**Note:** BLE provisioning may lose configuration over time and require re-provisioning. Static route method is more reliable for long-term use.
+BLE apps for manual provisioning: **LightBlue Explorer** (iOS) or **nRF Connect** (Android).
 
-## Important Warnings
+Alternatively, use the provisioning script in `src/scripts/ble-provisioning.ts` — update
+`CLOUD_HOST`, `SSID`, `PWD`, and `MAC` before running.
 
-**⚠️ Compatibility:** The official Ambientika app and Home Assistant Integration will not work when either method is active, as they require direct cloud connectivity.
+### Re-provisioning
 
-**⚠️ Network Impact:** Router static routes affect all devices on your network trying to reach the Ambientika cloud service.
+Re-provisioning is required if:
+- The Home Assistant IP address changes
+- A device is factory-reset
+
+It is **not** required for normal operation, add-on updates, or HA restarts.
+
+For full technical background on the provisioning flow and cloud registration, see
+[`CLOUD-INTEGRATION.md`](../CLOUD-INTEGRATION.md).
+
+---
+
+## Cloud Sync (Optional)
+
+With `cloud_sync_enabled: true` the add-on forwards device traffic to the Ambientika
+cloud in parallel. This allows the **official Ambientika app to continue working**
+alongside the Home Assistant integration — devices appear online in both.
+
+Without cloud sync, devices are only accessible via Home Assistant. The official
+Ambientika app will show them as offline.
+
+---
 
 ## Configuration
 
 ### MQTT Settings
 
-- **mqtt_host**: MQTT broker hostname (default: "core-mosquitto" for HA built-in broker)
-- **mqtt_port**: MQTT broker port (default: 1883)
-- **mqtt_username**: MQTT username (leave empty if no auth required)
-- **mqtt_password**: MQTT password (leave empty if no auth required)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `mqtt_host` | `core-mosquitto` | MQTT broker hostname |
+| `mqtt_port` | `1883` | MQTT broker port |
+| `mqtt_username` | _(empty)_ | MQTT username |
+| `mqtt_password` | _(empty)_ | MQTT password |
 
 ### Device Settings
 
-- **zone_count**: Number of device zones in your setup (1-10, default: 3)
-- **device_stale_timeout**: How long to wait before marking device as offline (30-300 seconds, default: 90)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `device_stale_timeout` | `90` | Seconds before a silent device is marked offline (30–300) |
 
 ### Network Settings
 
-- **rest_api_port**: Port for the REST API (default: 3000)
-- **local_socket_port**: Port for device TCP communication (default: 11000)
-- **udp_broadcast_start_port**: Starting port for UDP broadcasts (default: 45000)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `rest_api_port` | `3000` | REST API port |
+| `local_socket_port` | `11000` | TCP port devices connect to |
+| `udp_broadcast_start_port` | `45000` | Base port for UDP zone broadcasts (one per zone) |
 
-### Cloud Settings (Optional)
+### Cloud Settings
 
-- **cloud_sync_enabled**: Enable synchronization with original Ambientika cloud (default: false)
-- **cloud_host**: Ambientika cloud hostname (only if cloud sync enabled)
-- **cloud_port**: Ambientika cloud port (only if cloud sync enabled)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `cloud_sync_enabled` | `false` | Forward device traffic to Ambientika cloud |
+| `cloud_host` | `185.214.203.87` | Ambientika cloud IP |
+| `cloud_port` | `11000` | Ambientika cloud TCP port |
+
+---
 
 ## Usage
 
-Once configured and started:
+Once provisioned and running:
 
-1. Devices will automatically appear in Home Assistant via MQTT auto-discovery
-2. Control your devices through the Home Assistant interface
-3. Access the REST API at `http://homeassistant:3000` if needed
-4. Monitor logs for device connectivity and status
+1. Devices appear automatically in Home Assistant via MQTT auto-discovery
+2. Control devices through the Home Assistant climate/fan entities
+3. Optionally use the REST API at `http://<ha-host>:3000`
+
+---
 
 ## Troubleshooting
 
-### Devices Not Appearing
+### Devices not appearing in Home Assistant
 
-1. Verify devices are provisioned correctly with your HA IP
-2. Check that devices are on the same network as Home Assistant
-3. Ensure MQTT broker is running and accessible
-4. Check add-on logs for connection errors
+1. Check the add-on log for `Device connected: <IP>` — if missing, the device is not reaching the add-on
+2. Verify the device was provisioned with the correct HA IP
+3. Confirm the device is on the same WiFi network as Home Assistant
+4. Check that port 11000 is not blocked by a firewall
 
-### Connection Issues
+### Devices offline in the Ambientika app
 
-1. Verify port 11000 is not blocked by firewall
-2. Check that host networking is enabled (required for UDP broadcasts)
-3. Ensure devices can reach your Home Assistant IP address
+1. Enable `cloud_sync_enabled: true` in the add-on configuration
+2. Restart the add-on and wait ~60 seconds
+3. Check the add-on log for `connection to cloud established`
 
-### MQTT Issues
+### MQTT issues
 
-1. Verify MQTT broker settings in configuration
-2. Check MQTT broker logs for authentication errors
-3. Ensure auto-discovery is enabled in Home Assistant MQTT integration
+1. Verify MQTT broker settings
+2. Ensure MQTT auto-discovery is enabled in the Home Assistant MQTT integration
+3. Check the broker logs for authentication errors
+
+---
 
 ## Support
 
-For issues and questions, visit the [GitHub repository](https://github.com/sragas/ambientika-local-control).
+For issues and questions, visit the [GitHub repository](https://github.com/alexlenk/ambientika-local-control-ha-addon/issues).
 
 [aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
