@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.16 - Fix house ID for devices sending left-shifted bytes
+
+#### Fixed
+- **House ID sensor**: some devices send the house ID left-shifted by 8 bits in the UDP broadcast (trailing `0x00` instead of leading `0x00`). The mapper now detects this and right-shifts the value, so both encoding variants decode to the correct house ID.
+
+---
+
+### Version 1.1.16 - Fix setup packet format: houseId at correct byte offset
+
+#### Fixed
+- **Device setup**: the proxy-injected setup packet had an extra `0x00` padding byte at position 11, causing the device to read houseId shifted by one byte. Devices configured via the MQTT `setup/set` command would store a wrong house ID and broadcast it in UDP. The packet is now 15 bytes matching the cloud format (`02 00 <MAC 6b> 00 <role> <zone> <houseId 4b LE>`). Devices that received a setup command before this fix need to have the setup command resent to correct their stored house ID.
+
+---
+
 ### Version 1.1.15 - House ID populated from UDP broadcasts
 
 #### Fixed
