@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppEvents } from '../../models/enum/app-events.enum';
 import { Device } from '../../models/device.model';
+import { DeviceBroadcastStatus } from '../../models/device-broadcast-status.model';
 
 // Captured MQTT event handlers
 const mqttEventHandlers: Record<string, (...args: any[]) => void> = {};
@@ -557,6 +558,30 @@ describe('MqttService', () => {
                 ([topic]: [string]) => topic.endsWith('/fan-mode')
             );
             expect(fanModeCalls.some(([, msg]: [string, string]) => msg === 'MANUAL')).toBe(true);
+        });
+    });
+
+    describe('UDP broadcast houseId caching', () => {
+        it('caches houseId for all serials when a broadcast with houseId is received', () => {
+            process.env.HOUSE_ID_TOPIC = 'ambientika/%serialNumber/house_id';
+            process.env.DEVICE_ZONE_TOPIC = 'ambientika/%serialNumber/zone';
+            const broadcast = new DeviceBroadcastStatus(
+                'aabbccddeeff', ['aabbccddeeff', '112233445566'], 0, 'ALTERNATING', 'HIGH', 12048
+            );
+            eventService.deviceBroadcastStatus(broadcast);
+            expect((service as any).deviceHouseIds.get('aabbccddeeff')).toBe(12048);
+            expect((service as any).deviceHouseIds.get('112233445566')).toBe(12048);
+        });
+
+        it('does not overwrite houseId when broadcast has no houseId', () => {
+            process.env.HOUSE_ID_TOPIC = 'ambientika/%serialNumber/house_id';
+            process.env.DEVICE_ZONE_TOPIC = 'ambientika/%serialNumber/zone';
+            (service as any).deviceHouseIds.set('aabbccddeeff', 99);
+            const broadcast = new DeviceBroadcastStatus(
+                'aabbccddeeff', ['aabbccddeeff'], 0, 'ALTERNATING', 'HIGH', undefined
+            );
+            eventService.deviceBroadcastStatus(broadcast);
+            expect((service as any).deviceHouseIds.get('aabbccddeeff')).toBe(99);
         });
     });
 

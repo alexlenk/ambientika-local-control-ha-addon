@@ -133,8 +133,9 @@ export class DeviceMapper {
         const zoneIndex = this.getIntFromBufferSlice(1, 2) & 15;
         const fanMode = FanMode[this.getIntFromBufferSlice(2, 3) >> 4];
         const fanStatus = FanStatus[this.getIntFromBufferSlice(2, 3) & 15];
+        const houseId = data.length >= 7 ? this.getUInt32BEFromBufferSlice(3, 7) : undefined;
 
-        return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode, fanStatus)
+        return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode, fanStatus, houseId)
     }
 
     private getHexStringFromBufferSlice(start: number, end: number): string {

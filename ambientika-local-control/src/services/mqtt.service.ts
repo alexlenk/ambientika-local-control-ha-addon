@@ -93,10 +93,13 @@ export class MqttService {
         });
         this.eventService.on(AppEvents.DEVICE_BROADCAST_STATUS_RECEIVED,
             (deviceBroadcastStatus: DeviceBroadcastStatus) => {
-                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}, allSerials=${deviceBroadcastStatus.allSerialNumbers.join(',')}`);
-                // Cache zone for all devices at this IP (master + slaves)
+                this.log.debug(`UDP broadcast: zone=${deviceBroadcastStatus.zoneIndex}, fanMode=${deviceBroadcastStatus.fanMode}, fanStatus=${deviceBroadcastStatus.fanStatus}, serial=${deviceBroadcastStatus.serialNumber}, houseId=${deviceBroadcastStatus.houseId}, allSerials=${deviceBroadcastStatus.allSerialNumbers.join(',')}`);
+                // Cache zone and houseId for all devices at this IP (master + slaves)
                 for (const sn of deviceBroadcastStatus.allSerialNumbers) {
                     this.deviceZones.set(sn, deviceBroadcastStatus.zoneIndex);
+                    if (deviceBroadcastStatus.houseId !== undefined) {
+                        this.deviceHouseIds.set(sn, deviceBroadcastStatus.houseId);
+                    }
                 }
                 // Fan status/mode published only for the primary serial (master)
                 this.sendFanStatus(deviceBroadcastStatus);

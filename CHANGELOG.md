@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.15 - House ID populated from UDP broadcasts
+
+#### Fixed
+- **House ID sensor**: house ID was never populated because it relied only on cloud setup packets (which the cloud does not send on every connection). House ID is now read from the UDP broadcast packets that master devices send every ~30 seconds (bytes 3–6, uint32 big-endian). The value is cached for all devices sharing the same IP (master + slaves) and published to Home Assistant immediately on the next status update.
+
+---
+
 ### Version 1.1.14 - Fix zone sensor for slave devices after cloud role change
 
 #### Fixed

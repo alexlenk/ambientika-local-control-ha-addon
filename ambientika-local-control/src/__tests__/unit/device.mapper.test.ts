@@ -223,6 +223,15 @@ describe('DeviceMapper', () => {
             expect(result.zoneIndex).toBe(3);
             expect(result.fanMode).toBe('ALTERNATING');
             expect(result.fanStatus).toBe('START_SLOW');
+            expect(result.houseId).toBeUndefined();
+        });
+
+        it('extracts houseId from bytes 3–6 (uint32 BE) in 7-byte broadcast buffer', () => {
+            // Example: 65 30 28 00 00 2F 10 → houseId = 0x00002F10 = 12048
+            const buf = Buffer.from([0x65, 0x30, 0x28, 0x00, 0x00, 0x2F, 0x10]);
+            const result = mapper.deviceStatusBroadCastFromBuffer(buf, 'aabbccddeeff');
+            expect(result.zoneIndex).toBe(0);
+            expect(result.houseId).toBe(12048);
         });
 
         it('passes through undefined serialNumber', () => {
