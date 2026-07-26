@@ -239,6 +239,20 @@ it('passes through undefined serialNumber', () => {
             const result = mapper.deviceStatusBroadCastFromBuffer(buf, undefined);
             expect(result.serialNumber).toBeUndefined();
         });
+
+        it('falls back to UNKNOWN instead of undefined when fanMode nibble has no enum mapping (value 1 is unused)', () => {
+            const buf = Buffer.alloc(4);
+            buf.writeUInt8(1 << 4, 2); // fanMode nibble = 1, which is not a valid FanMode
+            const result = mapper.deviceStatusBroadCastFromBuffer(buf, 'aabbccddeeff');
+            expect(result.fanMode).toBe('UNKNOWN');
+        });
+
+        it('falls back to UNKNOWN instead of undefined when fanStatus nibble has no enum mapping', () => {
+            const buf = Buffer.alloc(4);
+            buf.writeUInt8(15, 2); // fanStatus nibble = 15, out of FanStatus range (0-11)
+            const result = mapper.deviceStatusBroadCastFromBuffer(buf, 'aabbccddeeff');
+            expect(result.fanStatus).toBe('UNKNOWN');
+        });
     });
 
     describe('Device.equals()', () => {

@@ -35,7 +35,14 @@ export class UDPBroadcastService {
     }
 
     private initListener(zoneIndex: number, listenerPort: number): void {
-        const socket = createSocket('udp4');
+        const socket = createSocket({type: 'udp4', reuseAddr: true});
+        socket.on('error', (err: NodeJS.ErrnoException) => {
+            // Without this handler, a bind failure (e.g. EADDRINUSE from a socket
+            // orphaned by a previous crash) is an unhandled 'error' event, which
+            // takes down the whole process instead of just this one zone listener.
+            this.log.error(`UDP socket error on port ${listenerPort}: ${err.message}`);
+            socket.close();
+        });
         socket.on('message', (data: Buffer, remoteInfo: RemoteInfo) => {
             this.log.silly(`Received data on udp socket ${listenerPort} for
             ${remoteInfo.address}:${remoteInfo.port} %o`, data);
