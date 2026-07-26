@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.18 - Fix broadcast field crash and UDP bind-error crash loop
+
+#### Fixed
+- **UDP broadcast**: a device reporting a `fanMode`/`fanStatus` nibble with no enum mapping (e.g. `FanMode` value `1`, which is unused in the protocol) resolved to `undefined`, which crashed the process via an unguarded `.toString()` call. Unmapped values now fall back to `UNKNOWN` instead of crashing. (#31)
+- **UDP broadcast**: the 16 zone-listener sockets had no `error` handler, so any bind failure — including `EADDRINUSE` from a socket orphaned by a previous crash — was an unhandled event that crashed the entire process instead of just that one listener, causing a crash loop that only a full host reboot could clear. Sockets now log and close on error instead of crashing, and bind with `reuseAddr` so a quick restart can rebind before the kernel fully releases the previous process's sockets. (#30)
+
+---
+
 ### Version 1.1.17 - Persist zone and house ID across restarts
 
 #### Fixed
