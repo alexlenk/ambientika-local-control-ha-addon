@@ -562,6 +562,24 @@ describe('MqttService', () => {
         });
     });
 
+    describe('sendFanMode / sendFanStatus with undefined broadcast fields (regression for #31)', () => {
+        it('does not crash when a broadcast carries an undefined fanMode (e.g. device sent an unmapped enum value)', () => {
+            process.env.FAN_MODE_TOPIC = 'ambientika/%serialNumber/fan-mode';
+            const broadcast = new DeviceBroadcastStatus(
+                'aabbccddeeff', ['aabbccddeeff'], 0, undefined as unknown as string, 'HIGH'
+            );
+            expect(() => eventService.deviceBroadcastStatus(broadcast)).not.toThrow();
+        });
+
+        it('does not crash when a broadcast carries an undefined fanStatus', () => {
+            process.env.FAN_STATUS_TOPIC = 'ambientika/%serialNumber/fan-status';
+            const broadcast = new DeviceBroadcastStatus(
+                'aabbccddeeff', ['aabbccddeeff'], 0, 'ALTERNATING', undefined as unknown as string
+            );
+            expect(() => eventService.deviceBroadcastStatus(broadcast)).not.toThrow();
+        });
+    });
+
     describe('UDP broadcast houseId caching', () => {
         it('caches houseId for all serials when a broadcast with houseId is received', () => {
             process.env.HOUSE_ID_TOPIC = 'ambientika/%serialNumber/house_id';

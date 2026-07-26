@@ -421,14 +421,14 @@ export class MqttService {
     private sendFanStatus(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
             this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, deviceBroadcastStatus.serialNumber),
-                deviceBroadcastStatus.fanStatus.toString());
+                (deviceBroadcastStatus.fanStatus ?? 'UNKNOWN').toString());
         }
     }
 
     private sendFanMode(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, deviceBroadcastStatus.serialNumber),
-                deviceBroadcastStatus.fanMode.toString());
+                (deviceBroadcastStatus.fanMode ?? 'UNKNOWN').toString());
         }
     }
 

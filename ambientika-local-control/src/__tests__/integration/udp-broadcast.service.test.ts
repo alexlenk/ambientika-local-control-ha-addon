@@ -11,6 +11,7 @@ const mockUdpSocket = {
     }),
     bind: vi.fn(),
     setBroadcast: vi.fn(),
+    close: vi.fn(),
     address: vi.fn().mockReturnValue({ address: '0.0.0.0', port: 45000 }),
 };
 
@@ -55,7 +56,7 @@ describe('UDPBroadcastService', () => {
 
             const dgram = await import('node:dgram');
             expect(dgram.createSocket).toHaveBeenCalledTimes(16);
-            expect(dgram.createSocket).toHaveBeenCalledWith('udp4');
+            expect(dgram.createSocket).toHaveBeenCalledWith({ type: 'udp4', reuseAddr: true });
         });
 
         it('binds sockets starting at the configured start port', () => {
@@ -78,6 +79,17 @@ describe('UDPBroadcastService', () => {
             udpHandlers['listening']?.();
 
             expect(mockUdpSocket.setBroadcast).toHaveBeenCalledWith(true);
+        });
+
+        it('registers an error handler so a bind failure (e.g. EADDRINUSE) is logged instead of crashing the process', () => {
+            new UDPBroadcastService(mockLog, eventService);
+
+            expect(udpHandlers['error']).toBeDefined();
+
+            const bindError = Object.assign(new Error('bind EADDRINUSE 0.0.0.0:45003'), { code: 'EADDRINUSE' });
+            expect(() => udpHandlers['error']?.(bindError)).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('EADDRINUSE'));
+            expect(mockUdpSocket.close).toHaveBeenCalled();
         });
     });
 

@@ -131,11 +131,19 @@ export class DeviceMapper {
     deviceStatusBroadCastFromBuffer(data: Buffer, serialNumber: string | undefined, allSerialNumbers: string[] = []): DeviceBroadcastStatus {
         this.buffer = data;
         const zoneIndex = this.getIntFromBufferSlice(1, 2) & 15;
-        const fanMode = FanMode[this.getIntFromBufferSlice(2, 3) >> 4];
-        const fanStatus = FanStatus[this.getIntFromBufferSlice(2, 3) & 15];
+        const fanModeValue = this.getIntFromBufferSlice(2, 3) >> 4;
+        const fanStatusValue = this.getIntFromBufferSlice(2, 3) & 15;
+        const fanMode = FanMode[fanModeValue];
+        const fanStatus = FanStatus[fanStatusValue];
+        if (fanMode === undefined) {
+            this.log.warn(`Unknown fan mode value ${fanModeValue} in broadcast status, defaulting to UNKNOWN`);
+        }
+        if (fanStatus === undefined) {
+            this.log.warn(`Unknown fan status value ${fanStatusValue} in broadcast status, defaulting to UNKNOWN`);
+        }
         const houseId = data.length >= 7 ? this.getUInt32BEFromBufferSlice(3, 7) : undefined;
 
-        return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode, fanStatus, houseId)
+        return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode ?? 'UNKNOWN', fanStatus ?? 'UNKNOWN', houseId)
     }
 
     private getHexStringFromBufferSlice(start: number, end: number): string {
