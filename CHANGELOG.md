@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.19 - Diagnostics for unrecognized packets, BLE app doc fix
+
+#### Added
+- **Local socket**: device data of an unrecognized length (not 18 or 21 bytes) is now logged at `warn` level instead of only `silly`. Such data never reaches `deviceStatusUpdate`, so it's silently never saved to the DB or published to MQTT — this makes that failure mode visible without needing silly logging enabled. (#29)
+
+#### Changed
+- **Docs**: replaced nRF Connect with BLE Tester as the recommended Android BLE provisioning app — nRF Connect can fail to trigger the device's automatic restart after writing the WiFi characteristic. (#28)
+
+---
+
 ### Version 1.1.18 - Fix broadcast field crash and UDP bind-error crash loop
 
 #### Fixed
