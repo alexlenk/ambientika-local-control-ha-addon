@@ -46,7 +46,7 @@ It writes three values into the device:
    - `P_<YOUR_WIFI_PASSWORD>`
 5. The device restarts and connects to the add-on
 
-BLE apps for manual provisioning: **LightBlue Explorer** (iOS) or **nRF Connect** (Android).
+BLE apps for manual provisioning: **LightBlue Explorer** (iOS) or **BLE Tester** (Android). (nRF Connect can fail to trigger the device's automatic restart after writing — see [#28](https://github.com/alexlenk/ambientika-local-control-ha-addon/issues/28).)
 
 Alternatively, use the provisioning script in `src/scripts/ble-provisioning.ts` — update
 `CLOUD_HOST`, `SSID`, `PWD`, and `MAC` before running.

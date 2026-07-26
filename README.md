@@ -49,7 +49,7 @@ Each device is configured once over Bluetooth to connect directly to your HA IP.
 | `S_<wifi-ssid>` | `S_MyNetwork` |
 | `P_<wifi-password>` | `P_mypassword` |
 
-BLE apps: **LightBlue Explorer** (iOS) or **nRF Connect** (Android/iOS).
+BLE apps: **LightBlue Explorer** (iOS) or **BLE Tester** (Android). (nRF Connect can fail to trigger the device's automatic restart after writing — see [#28](https://github.com/alexlenk/ambientika-local-control-ha-addon/issues/28).)
 
 The device appears as `VMC_<MAC>` in BLE scans. After writing, it restarts and connects to the add-on.
 

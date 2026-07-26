@@ -152,6 +152,24 @@ describe('LocalSocketService', () => {
 
             expect(listener).not.toHaveBeenCalled();
         });
+
+        it('unknown packet size: logs a warning so it is visible without silly logging (regression for #29)', () => {
+            socketHandlers['data']?.(Buffer.alloc(22));
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('22-byte'));
+        });
+
+        it('18-byte data: does NOT log an unrecognized-length warning', () => {
+            socketHandlers['data']?.(make18ByteBuffer());
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
+
+        it('21-byte data: does NOT log an unrecognized-length warning', () => {
+            socketHandlers['data']?.(make21ByteBuffer());
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
     });
 
     describe('close handling', () => {
