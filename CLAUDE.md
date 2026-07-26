@@ -127,10 +127,13 @@ Publishes Home Assistant MQTT auto-discovery messages so devices appear automati
 ## Release process
 
 1. Bump `version` in `ambientika-local-control/config.yaml`
-2. Commit to `dev` branch, push, open PR
-3. Merge PR to `master`
-4. `release.yml` fires automatically: reads version, creates tag `vX.Y.Z`, creates GitHub Release
-5. `build.yml` triggers on the new tag: runs tests, builds and pushes Docker images for `amd64` + `aarch64`
+2. **Always update `CHANGELOG.md`** (repo root) with a `### Version X.Y.Z - <summary>` entry for the release — `release.yml` extracts this section verbatim for the GitHub Release notes, so a missing entry means an empty release description. Never skip this step, even for small fixes.
+3. Commit to `dev` branch, push, open PR
+4. Merge PR to `master`
+5. `release.yml` fires automatically: reads version, creates tag `vX.Y.Z`, creates GitHub Release
+6. `build.yml` triggers on the new tag: runs tests, builds and pushes Docker images for `amd64` + `aarch64`
+
+Note: `ambientika-local-control/CHANGELOG.md` is a second, separate changelog file inside the add-on directory — this is the one Home Assistant Supervisor actually displays in the add-on's "Changelog" tab in the UI. It is easy to forget since only the root `CHANGELOG.md` feeds the GitHub Release. Keep both in sync, or check whether a symlink (`ambientika-local-control/CHANGELOG.md` → `../CHANGELOG.md`) would be safer before assuming manual sync is enough.
 
 ## Test infrastructure
 
