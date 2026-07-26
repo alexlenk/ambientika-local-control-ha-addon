@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.20 - Drop unnecessary NET_ADMIN privilege
+
+#### Changed
+- **Security**: removed the `NET_ADMIN` privileged capability from `config.yaml`. Nothing in the add-on's networking code (plain TCP/UDP sockets, `SO_BROADCAST` for UDP broadcast) requires it — it appears to have been carried over unexamined from the original fork. `host_network: true` is kept since it's genuinely required to receive LAN broadcast/TCP traffic from devices. Verified by building the image locally and confirming all UDP (45000–45015) and TCP (11000, 3000) sockets still bind cleanly without the capability. Should improve the add-on's Home Assistant security rating.
+
+---
+
 ### Version 1.1.19 - Diagnostics for unrecognized packets, BLE app doc fix
 
 #### Added
