@@ -17,11 +17,11 @@ const mockRemoteSocket = {
 vi.mock('node:net', () => {
     const isIP = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? 4 : 0;
     return {
-        Socket: vi.fn().mockImplementation(() => mockRemoteSocket),
+        Socket: vi.fn().mockImplementation(function () { return mockRemoteSocket; }),
         createServer: vi.fn(),
         isIP,
         default: {
-            Socket: vi.fn().mockImplementation(() => mockRemoteSocket),
+            Socket: vi.fn().mockImplementation(function () { return mockRemoteSocket; }),
             createServer: vi.fn(),
             isIP,
         },

@@ -1,9 +1,7 @@
 import {Device} from '../models/device.model';
-import * as sqlite3 from 'sqlite3';
+import {DatabaseSync} from 'node:sqlite';
 import dotenv from 'dotenv'
 import {Logger} from 'winston';
-import * as fs from 'node:fs';
-import {Database} from 'sqlite3';
 import {EventService} from './event.service';
 import {AppEvents} from '../models/enum/app-events.enum';
 import {Instant} from '@js-joda/core';
@@ -15,7 +13,7 @@ dotenv.config()
 
 export class DeviceStorageService {
 
-    private db: Database;
+    private db: DatabaseSync;
     private deviceMapper: DeviceMapper;
     private lastSentCommands: Map<string, OperatingModeDto> = new Map();
 
@@ -25,34 +23,34 @@ export class DeviceStorageService {
         this.initEventListener();
     }
 
-    createDbConnection() {
+    private createDbConnection(): DatabaseSync {
         const filepath = process.env.DEVICE_DB || 'devices.db';
-        if (fs.existsSync(filepath)) {
-            const db = new sqlite3.Database(filepath);
-            this.migrateDb(db);
-            return db;
-        } else {
-            const db = new sqlite3.Database(filepath, (error) => {
-                if (error) {
-                    this.log.error('Error creating db', error);
-                }
-                this.createTable(db);
-            });
-            this.log.info("Connection with SQLite has been established");
-            return db;
+        const db = new DatabaseSync(filepath);
+        this.createTable(db);
+        this.migrateDb(db);
+        this.log.info('Connection with SQLite has been established');
+        return db;
+    }
+
+    private migrateDb(db: DatabaseSync): void {
+        // Add zone/houseId columns if they don't exist (safe to run on every startup —
+        // ALTER TABLE ADD COLUMN has no "IF NOT EXISTS" form, so a "duplicate column"
+        // error here just means a previous startup already applied it).
+        for (const statement of [
+            'ALTER TABLE devices ADD COLUMN zone INTEGER DEFAULT NULL',
+            'ALTER TABLE devices ADD COLUMN houseId INTEGER DEFAULT NULL',
+        ]) {
+            try {
+                db.exec(statement);
+            } catch {
+                // column already exists
+            }
         }
     }
 
-    private migrateDb(db: Database): void {
-        // Add zone/houseId columns if they don't exist (safe to run on every startup)
-        db.run('ALTER TABLE devices ADD COLUMN zone INTEGER DEFAULT NULL', () => {});
-        db.run('ALTER TABLE devices ADD COLUMN houseId INTEGER DEFAULT NULL', () => {});
-    }
-
-
-    createTable(db: Database): void {
+    private createTable(db: DatabaseSync): void {
         db.exec(`
-            CREATE TABLE devices
+            CREATE TABLE IF NOT EXISTS devices
             (
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 serialNumber      VARCHAR(50) NOT NULL,
@@ -80,40 +78,40 @@ export class DeviceStorageService {
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.silly(`Storage service local data update received: `, device);
-            
+
             // Check if we have a pending command for this device - FOR DEBUGGING ONLY
             const lastCommand = this.lastSentCommands.get(device.serialNumber);
             if (lastCommand) {
                 // Check if device applied the command
                 let commandApplied = true;
-                
+
                 if (lastCommand.operatingMode && device.operatingMode !== lastCommand.operatingMode) {
                     this.log.warn(`Device ${device.serialNumber} REJECTED command: sent ${lastCommand.operatingMode}, device reports ${device.operatingMode}`);
                     commandApplied = false;
                 }
-                
+
                 if (lastCommand.fanSpeed && device.fanSpeed !== lastCommand.fanSpeed.toUpperCase()) {
                     this.log.warn(`Device ${device.serialNumber} REJECTED fanSpeed: sent ${lastCommand.fanSpeed}, device reports ${device.fanSpeed}`);
                     commandApplied = false;
                 }
-                
+
                 if (commandApplied) {
                     this.log.info(`Device ${device.serialNumber} applied command successfully: ${JSON.stringify(lastCommand)}`);
                     this.lastSentCommands.delete(device.serialNumber);
                 } else {
                     this.log.debug(`Device ${device.serialNumber} command still pending: ${JSON.stringify(lastCommand)}`);
                 }
-                
+
                 // DO NOT OVERRIDE DEVICE STATE - ALWAYS SHOW REALITY
             }
-            
+
             this.saveDevice(device);
         });
 
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
             this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(opMode)}`);
             this.lastSentCommands.set(serialNumber, opMode);
-            
+
             // Commands will be applied via override logic when real device status updates arrive
             // No need to trigger fake device status updates here
         });
@@ -139,10 +137,11 @@ export class DeviceStorageService {
         const params: Record<string, string | number> = { $serialNumber: serialNumber };
         if (zone !== undefined) { updates.push('zone = $zone'); params.$zone = zone; }
         if (houseId !== undefined) { updates.push('houseId = $houseId'); params.$houseId = houseId; }
-        this.db.run(`UPDATE devices SET ${updates.join(', ')} WHERE serialNumber = $serialNumber`, params,
-            (error: Error) => {
-                if (error) this.log.error(`Error saving zone/houseId for ${serialNumber}`, error);
-            });
+        try {
+            this.db.prepare(`UPDATE devices SET ${updates.join(', ')} WHERE serialNumber = $serialNumber`).run(params);
+        } catch (error) {
+            this.log.error(`Error saving zone/houseId for ${serialNumber}`, error);
+        }
     }
 
     saveDevice(device: Device) {
@@ -156,64 +155,51 @@ export class DeviceStorageService {
     }
 
     getDevices(callback: (device: DeviceDto[]) => void): void {
-        this.db.all(`SELECT *
-                     FROM devices`, (error, rows: DeviceDto[]) => {
-            if (error) {
-                this.log.error('Error fetching devices from db', error);
-            } else {
-                callback(rows)
-            }
-        });
+        try {
+            const rows = this.db.prepare('SELECT * FROM devices').all() as unknown as DeviceDto[];
+            callback(rows);
+        } catch (error) {
+            this.log.error('Error fetching devices from db', error);
+        }
     }
 
     deleteDevice(dto: DeviceDto): void {
-        this.db.run('DELETE FROM devices WHERE id=?', dto.id, (error) => {
-            if (error) {
-                this.log.error(`Error deleting device from db  ${dto}`, error);
-            } else {
-                const device = this.deviceMapper.deviceFromDto(dto);
-                this.eventService.deviceOffline(device);
-                this.log.debug(`Deleted device from db ${device}`)
-            }
-        })
+        try {
+            this.db.prepare('DELETE FROM devices WHERE id=?').run(dto.id as number);
+            const device = this.deviceMapper.deviceFromDto(dto);
+            this.eventService.deviceOffline(device);
+            this.log.debug(`Deleted device from db ${device}`)
+        } catch (error) {
+            this.log.error(`Error deleting device from db  ${dto}`, error);
+        }
     }
 
     findExistingDeviceBySerialNumber(serialNumber: string, callback: (device: (DeviceDto | undefined)) => void): void {
-        this.db.get(`SELECT *
-                     FROM devices
-                     WHERE serialNumber = ?`,
-            serialNumber, (error, row: DeviceDto | undefined) => {
-                if (error) {
-                    this.log.error('Error fetching device from db', error);
-                } else {
-                    callback(row)
-                }
-            });
+        try {
+            const row = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
+            callback(row);
+        } catch (error) {
+            this.log.error('Error fetching device from db', error);
+        }
     }
 
     findExistingDeviceByRemoteAddress(remoteAddress: string,
                                       callback: (device: (DeviceDto | undefined)) => void): void {
-        this.db.get(`SELECT *
-                     FROM devices
-                     WHERE remoteAddress = ?`,
-            remoteAddress, (error, row: DeviceDto | undefined) => {
-                if (error) {
-                    this.log.error('Error fetching device from db', error);
-                } else {
-                    callback(row)
-                }
-            });
+        try {
+            const row = this.db.prepare('SELECT * FROM devices WHERE remoteAddress = ?').get(remoteAddress) as DeviceDto | undefined;
+            callback(row);
+        } catch (error) {
+            this.log.error('Error fetching device from db', error);
+        }
     }
 
     createDevice(device: Device): void {
-        this.db.run('INSERT INTO devices ' + this.getValueString(),
-            this.getParams(device), (error: Error) => {
-                if (error) {
-                    this.log.error('Error created device on db', error);
-                } else {
-                    this.log.debug('Successfully created device on db', error);
-                }
-            });
+        try {
+            this.db.prepare('INSERT INTO devices ' + this.getValueString()).run(this.getParams(device) as unknown as Record<string, string | number>);
+            this.log.debug('Successfully created device on db');
+        } catch (error) {
+            this.log.error('Error created device on db', error);
+        }
     }
 
     updateDevice(device: Device, existingDevice: DeviceDto): void {
@@ -221,14 +207,12 @@ export class DeviceStorageService {
         params.$lastUpdate = Instant.now().toString();
         params.$firstSeen = existingDevice.firstSeen;
         params.$id = existingDevice.id;
-        this.db.run('REPLACE INTO devices ' + this.getValueString(existingDevice.id), params
-            , (error: Error) => {
-                if (error) {
-                    this.log.error('Error created device on db', error);
-                } else {
-                    this.log.silly('Successfully updated device on db', error);
-                }
-            });
+        try {
+            this.db.prepare('REPLACE INTO devices ' + this.getValueString(existingDevice.id)).run(params as unknown as Record<string, string | number>);
+            this.log.silly('Successfully updated device on db');
+        } catch (error) {
+            this.log.error('Error created device on db', error);
+        }
     }
 
     private getValueString(id?: number): string {
@@ -296,14 +280,12 @@ export class DeviceStorageService {
 
     close(): Promise<void> {
         this.log.debug('Closing DeviceStorageService');
-        return new Promise((resolve) => {
-            this.db.close((error) => {
-                if (error) {
-                    this.log.error('Error closing db', error);
-                }
-                resolve();
-            });
-        });
+        try {
+            this.db.close();
+        } catch (error) {
+            this.log.error('Error closing db', error);
+        }
+        return Promise.resolve();
     }
 
 }

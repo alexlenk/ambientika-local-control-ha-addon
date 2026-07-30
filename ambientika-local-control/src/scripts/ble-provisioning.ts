@@ -1,3 +1,7 @@
+// One-off BLE provisioning tool — not part of the add-on build (excluded in tsconfig.json).
+// node-ble drags in vulnerable transitive deps we don't want in the main devDependency tree
+// (see #50), so it isn't installed by `npm install`. Run this script by first installing it
+// standalone: `npm i node-ble --no-save`, then `npx ts-node src/scripts/ble-provisioning.ts`.
 import {Adapter, createBluetooth, Device, GattServer, GattService} from 'node-ble';
 
 const {bluetooth, destroy} = createBluetooth()

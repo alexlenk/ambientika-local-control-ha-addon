@@ -38,8 +38,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ambientika-local-control/package-lock.json
 
-      - name: Install dependencies (skip native compilation — tests mock all I/O)
-        run: npm install --ignore-scripts
+      - name: Install dependencies
+        run: npm install
         working-directory: ambientika-local-control
 
       - name: Run lint

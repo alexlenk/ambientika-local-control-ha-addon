@@ -25,19 +25,6 @@ vi.mock('mqtt', () => ({
 
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 
-// Mock sqlite3 so DeviceStorageService dependency doesn't need native compilation
-vi.mock('sqlite3', () => {
-    const mockDb = { run: vi.fn(), get: vi.fn(), all: vi.fn(), exec: vi.fn() };
-    return {
-        default: { Database: vi.fn().mockReturnValue(mockDb) },
-        Database: vi.fn().mockReturnValue(mockDb),
-    };
-});
-vi.mock('node:fs', () => ({
-    default: { existsSync: vi.fn().mockReturnValue(true) },
-    existsSync: vi.fn().mockReturnValue(true),
-}));
-
 import { MqttService } from '../../services/mqtt.service';
 import { EventService } from '../../services/event.service';
 
