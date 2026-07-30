@@ -176,6 +176,27 @@ Set `log_full_serials: true` to see full serials in the logs (useful when debugg
 
 ---
 
+## REST API
+
+The REST API (`rest_api_port`, default 3000) is unauthenticated by default and, because the
+add-on runs with `host_network: true`, reachable from anywhere on your LAN — the vendor
+device protocol itself has no authentication, and this add-on can only lock down the parts
+it controls.
+
+- `rest_api_bind` (default `0.0.0.0`) — set to `127.0.0.1` to restrict the API to the HA host
+  itself if you don't need LAN access to it.
+- `rest_api_token` — when set, every endpoint except `GET /health` requires an
+  `Authorization: Bearer <token>` header. `/health` is always left open since the Supervisor
+  watchdog polls it directly with no credentials.
+- `enable_debug_endpoints` (default `false`) — gates `POST /cloud/send-setup/:serialNumber`,
+  a debug endpoint that lets a caller directly reconfigure a device's role/zone/house ID.
+- `:serialNumber` path params are validated (12 hex characters) before reaching any handler,
+  and request bodies for `/device/operating-mode` and `/device/weather-update` are validated
+  against the known enum values / sane ranges rather than passed straight into buffer
+  construction.
+
+---
+
 ## MQTT Topics
 
 ### Device setup command
