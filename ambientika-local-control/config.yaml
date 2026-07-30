@@ -21,7 +21,7 @@ options:
   mqtt_username: ""
   mqtt_password: ""
   cloud_sync_enabled: false
-  cloud_host: "185.214.203.87"
+  cloud_host: "app.ambientika.eu"
   cloud_port: 11000
   device_stale_timeout: 90
   rest_api_port: 3000

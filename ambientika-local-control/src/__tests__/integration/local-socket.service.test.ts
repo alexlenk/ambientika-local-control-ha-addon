@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppEvents } from '../../models/enum/app-events.enum';
 
 // Capture server and socket event handlers
@@ -23,12 +23,16 @@ const mockServer = {
     listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => { if (cb) cb(); }),
 };
 
-vi.mock('node:net', () => ({
-    createServer: vi.fn(() => mockServer),
-    Server: vi.fn(),
-    Socket: vi.fn(),
-    default: { createServer: vi.fn(() => mockServer), Server: vi.fn(), Socket: vi.fn() },
-}));
+vi.mock('node:net', () => {
+    const isIP = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? 4 : 0;
+    return {
+        createServer: vi.fn(() => mockServer),
+        Server: vi.fn(),
+        Socket: vi.fn(),
+        isIP,
+        default: { createServer: vi.fn(() => mockServer), Server: vi.fn(), Socket: vi.fn(), isIP },
+    };
+});
 
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 
@@ -274,11 +278,19 @@ describe('LocalSocketService', () => {
             vi.clearAllMocks();
             Object.keys(cloudSocketHandlers).forEach(k => delete cloudSocketHandlers[k]);
             process.env.REMOTE_CLOUD_HOST = '185.214.203.87';
+            // Cloud host is resolved once at construction, so recreate the service
+            // after setting the env var rather than relying on the outer instance.
+            eventService = new EventService(mockLog);
+            service = new LocalSocketService(mockLog, eventService);
             // Connect a real device first so deviceConnections is populated
             serverHandlers['connection']?.(mockSocket);
             socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
             // Now simulate cloud connecting back
             serverHandlers['connection']?.(cloudSocket);
+        });
+
+        afterEach(() => {
+            delete process.env.REMOTE_CLOUD_HOST;
         });
 
         it('does NOT emit LOCAL_SOCKET_CONNECTED for cloud connection', () => {

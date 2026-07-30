@@ -14,14 +14,19 @@ const mockRemoteSocket = {
     destroyed: false,
 };
 
-vi.mock('node:net', () => ({
-    Socket: vi.fn().mockImplementation(() => mockRemoteSocket),
-    createServer: vi.fn(),
-    default: {
+vi.mock('node:net', () => {
+    const isIP = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? 4 : 0;
+    return {
         Socket: vi.fn().mockImplementation(() => mockRemoteSocket),
         createServer: vi.fn(),
-    },
-}));
+        isIP,
+        default: {
+            Socket: vi.fn().mockImplementation(() => mockRemoteSocket),
+            createServer: vi.fn(),
+            isIP,
+        },
+    };
+});
 
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 
