@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@js-joda/core": "^6.1.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "mqtt": "^5.10.1",
     "node-schedule": "^2.1.1",
