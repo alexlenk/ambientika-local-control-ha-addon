@@ -109,6 +109,14 @@ describe('SchedulerService', () => {
         expect(offlineListener).not.toHaveBeenCalled();
     });
 
+    it('does nothing when devices callback yields undefined', () => {
+        mockStorage.getDevices.mockImplementation((cb: (dtos: DeviceDto[]) => void) => cb(undefined as unknown as DeviceDto[]));
+        const offlineListener = vi.fn();
+        eventService.on(AppEvents.DEVICE_OFFLINE, offlineListener);
+        expect(() => capturedJobCallback!()).not.toThrow();
+        expect(offlineListener).not.toHaveBeenCalled();
+    });
+
     describe('close()', () => {
         it('cancels the scheduled job', () => {
             service.close();

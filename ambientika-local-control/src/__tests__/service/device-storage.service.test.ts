@@ -19,6 +19,11 @@ function makeDevice(sn = 'aabbccddeeff'): Device {
         false, 'GOOD', false, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
 }
 
+function makeAlarmedDevice(sn = 'aabbccddeeff'): Device {
+    return new Device(sn, 'AUTO', 'LOW', 'NORMAL', 22, 55, 'GOOD',
+        true, 'GOOD', true, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
+}
+
 function makeDto(sn = 'aabbccddeeff'): DeviceDto {
     return {
         id: 1, serialNumber: sn, status: 'ONLINE',
@@ -76,6 +81,14 @@ describe('DeviceStorageService', () => {
             expect(callback).toHaveBeenCalledWith([]);
         });
 
+        it('logs an error instead of throwing when the query fails', () => {
+            service.close();
+            const callback = vi.fn();
+            expect(() => service.getDevices(callback)).not.toThrow();
+            expect(callback).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching devices from db', expect.any(Error));
+        });
+
         it('calls callback with all rows after devices are saved', () => {
             service.saveDevice(makeDevice('aabbccddeeff'));
             service.saveDevice(makeDevice('112233445566'));
@@ -102,6 +115,14 @@ describe('DeviceStorageService', () => {
             service.findExistingDeviceBySerialNumber('aabbccddeeff', callback);
             expect(callback).toHaveBeenCalledWith(expect.objectContaining({ serialNumber: 'aabbccddeeff', operatingMode: 'AUTO' }));
         });
+
+        it('logs an error instead of throwing when the query fails', () => {
+            service.close();
+            const callback = vi.fn();
+            expect(() => service.findExistingDeviceBySerialNumber('aabbccddeeff', callback)).not.toThrow();
+            expect(callback).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching device from db', expect.any(Error));
+        });
     });
 
     describe('findExistingDeviceByRemoteAddress', () => {
@@ -116,6 +137,14 @@ describe('DeviceStorageService', () => {
             const callback = vi.fn();
             service.findExistingDeviceByRemoteAddress('192.168.1.1', callback);
             expect(callback).toHaveBeenCalledWith(expect.objectContaining({ serialNumber: 'aabbccddeeff' }));
+        });
+
+        it('logs an error instead of throwing when the query fails', () => {
+            service.close();
+            const callback = vi.fn();
+            expect(() => service.findExistingDeviceByRemoteAddress('192.168.1.1', callback)).not.toThrow();
+            expect(callback).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching device from db', expect.any(Error));
         });
     });
 
@@ -146,6 +175,30 @@ describe('DeviceStorageService', () => {
             expect(secondDto?.operatingMode).toBe('NIGHT');
             expect(secondDto?.temperature).toBe(25);
         });
+
+        it('persists humidityAlarm and nightAlarm as 1 when true', () => {
+            service.saveDevice(makeAlarmedDevice('aabbccddeeff'));
+
+            const callback = vi.fn();
+            service.findExistingDeviceBySerialNumber('aabbccddeeff', callback);
+            expect(callback).toHaveBeenCalledWith(expect.objectContaining({ humidityAlarm: 1, nightAlarm: 1 }));
+        });
+
+        it('createDevice logs an error instead of throwing when the insert fails', () => {
+            service.close();
+            expect(() => service.createDevice(makeDevice())).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error created device on db', expect.any(Error));
+        });
+
+        it('updateDevice logs an error instead of throwing when the replace fails', () => {
+            service.saveDevice(makeDevice('aabbccddeeff'));
+            let existing: DeviceDto | undefined;
+            service.findExistingDeviceBySerialNumber('aabbccddeeff', (dto) => { existing = dto; });
+            service.close();
+
+            expect(() => service.updateDevice(makeDevice('aabbccddeeff'), existing as DeviceDto)).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error created device on db', expect.any(Error));
+        });
     });
 
     describe('saveDeviceZoneHouseId', () => {
@@ -170,6 +223,25 @@ describe('DeviceStorageService', () => {
         it('does nothing when both zone and houseId are undefined', () => {
             service.saveDevice(makeDevice('aabbccddeeff'));
             expect(() => service.saveDeviceZoneHouseId('aabbccddeeff', undefined, undefined)).not.toThrow();
+        });
+
+        it('updates only houseId when zone is undefined', () => {
+            service.saveDevice(makeDevice('aabbccddeeff'));
+            service.saveDeviceZoneHouseId('aabbccddeeff', undefined, 12048);
+
+            const callback = vi.fn();
+            service.findExistingDeviceBySerialNumber('aabbccddeeff', callback);
+            expect(callback).toHaveBeenCalledWith(expect.objectContaining({ zone: null, houseId: 12048 }));
+        });
+
+        it('logs an error instead of throwing when the update fails', () => {
+            service.saveDevice(makeDevice('aabbccddeeff'));
+            service.close();
+            expect(() => service.saveDeviceZoneHouseId('aabbccddeeff', 3, 12048)).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('Error saving zone/houseId'),
+                expect.any(Error)
+            );
         });
     });
 
@@ -230,6 +302,15 @@ describe('DeviceStorageService', () => {
             expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('applied command successfully'));
             expect(service.hasStoredCommand('aabbccddeeff')).toBe(false);
         });
+
+        it('just saves the device when there is no stored command for it', () => {
+            const device = makeDevice();
+            expect(() => eventService.deviceStatusUpdate(device)).not.toThrow();
+
+            const callback = vi.fn();
+            service.findExistingDeviceBySerialNumber('aabbccddeeff', callback);
+            expect(callback).toHaveBeenCalledWith(expect.objectContaining({ serialNumber: 'aabbccddeeff' }));
+        });
     });
 
     describe('migration (real file-backed db)', () => {
@@ -254,6 +335,14 @@ describe('DeviceStorageService', () => {
             svc2.findExistingDeviceBySerialNumber('aabbccddeeff', callback);
             expect(callback).toHaveBeenCalledWith(expect.objectContaining({ serialNumber: 'aabbccddeeff', zone: null, houseId: null }));
             svc2.close();
+        });
+
+        it('defaults to devices.db when DEVICE_DB is unset', () => {
+            delete process.env.DEVICE_DB;
+            const defaultDbPath = path.join(process.cwd(), 'devices.db');
+            const svc = new DeviceStorageService(mockLog, new EventService(mockLog));
+            svc.close();
+            if (fs.existsSync(defaultDbPath)) fs.unlinkSync(defaultDbPath);
         });
     });
 

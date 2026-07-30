@@ -10,7 +10,10 @@ let paramHandler: ((req: any, res: any, next: () => void, value: string) => void
 vi.mock('express', () => {
     const mockApp = {
         use: vi.fn((mw: (req: any, res: any, next: () => void) => void) => { middlewares.push(mw); }),
-        listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => { if (cb) cb(); return {}; }),
+        listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => {
+            if (cb) cb();
+            return { close: vi.fn((closeCb?: () => void) => { if (closeCb) closeCb(); }) };
+        }),
         param: vi.fn((_name: string, handler: any) => { paramHandler = handler; }),
         get: vi.fn((path: string, handler: (req: any, res: any) => void) => {
             routeHandlers[`GET:${path}`] = handler;
@@ -76,6 +79,7 @@ function dispatch(key: string, req: any, res: any) {
 describe('RestService', () => {
     let eventService: EventService;
     let mockStorage: any;
+    let service: RestService;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -91,7 +95,7 @@ describe('RestService', () => {
             getDevices: vi.fn(),
         };
         // Instantiate — this registers all route handlers
-        new RestService(mockLog, mockStorage, eventService);
+        service = new RestService(mockLog, mockStorage, eventService);
     });
 
     afterEach(() => {
@@ -135,6 +139,14 @@ describe('RestService', () => {
 
         it('reports deviceCount 0 when storage returns no devices', () => {
             mockStorage.getDevices.mockImplementation((cb: (devices: DeviceDto[]) => void) => cb([]));
+            const res = makeRes();
+            dispatch('GET:/health', {}, res);
+
+            expect(res.send).toHaveBeenCalledWith(expect.objectContaining({ deviceCount: 0 }));
+        });
+
+        it('reports deviceCount 0 when storage yields undefined', () => {
+            mockStorage.getDevices.mockImplementation((cb: (devices: DeviceDto[]) => void) => cb(undefined as unknown as DeviceDto[]));
             const res = makeRes();
             dispatch('GET:/health', {}, res);
 
@@ -397,6 +409,12 @@ describe('RestService', () => {
 
                 expect(res.status).toHaveBeenCalledWith(400);
             });
+        });
+    });
+
+    describe('close()', () => {
+        it('closes the underlying http server', async () => {
+            await expect(service.close()).resolves.toBeUndefined();
         });
     });
 });

@@ -6,6 +6,7 @@ import { Device } from '../../models/device.model';
 import { DeviceDto } from '../../dto/device.dto';
 import { WeatherUpdateDto } from '../../dto/weather-update.dto';
 import { DeviceSetupDto } from '../../dto/device-setup.dto';
+import { OperatingMode } from '../../models/enum/operating-mode.enum';
 
 const mockLog = {
     debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), silly: vi.fn(),
@@ -35,12 +36,13 @@ const mockStorage = {
 
 describe('DeviceCommandService', () => {
     let eventService: EventService;
+    let service: DeviceCommandService;
 
     beforeEach(() => {
         vi.useFakeTimers();
         vi.clearAllMocks();
         eventService = new EventService(mockLog);
-        new DeviceCommandService(mockLog, mockStorage, eventService);
+        service = new DeviceCommandService(mockLog, mockStorage, eventService);
     });
 
     afterEach(() => {
@@ -161,6 +163,86 @@ describe('DeviceCommandService', () => {
 
             expect(listener).toHaveBeenCalled();
         });
+
+        it('uses the device lastOperatingMode when operatingMode equals OperatingMode.LAST numerically', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            let capturedData: Buffer | undefined;
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, (data: Buffer) => {
+                capturedData = data;
+            });
+
+            eventService.deviceOperatingModeUpdate(
+                { operatingMode: OperatingMode.LAST.toString() }, 'aabbccddeeff'
+            );
+
+            // Buffer byte 9 holds the operating mode; device's lastOperatingMode is 'SMART' (0)
+            expect(capturedData?.[9]).toBe(OperatingMode.SMART);
+        });
+    });
+
+    describe('analyzeCommandBuffer warnings', () => {
+        it('warns when the device is a SLAVE role', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => {
+                    const dto = makeDto();
+                    dto.deviceRole = 'SLAVE_OPPOSITE_MASTER';
+                    cb(dto);
+                }
+            );
+
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('SLAVE role'));
+        });
+
+        it('warns when the device is locked in MASTER_SLAVE_FLOW and a different mode is requested', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => {
+                    const dto = makeDto();
+                    dto.operatingMode = 'MASTER_SLAVE_FLOW';
+                    cb(dto);
+                }
+            );
+
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('MASTER_SLAVE_FLOW'));
+        });
+    });
+
+    describe('unknown fanSpeed handling', () => {
+        it('defaults to MEDIUM and warns when fanSpeed is not a recognized enum key', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            let capturedData: Buffer | undefined;
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, (data: Buffer) => {
+                capturedData = data;
+            });
+
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'BOGUS' as any }, 'aabbccddeeff');
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown fanSpeed'));
+            expect(capturedData?.[10]).toBe(1); // FanSpeed.MEDIUM
+        });
+    });
+
+    describe('processNextCommand guard', () => {
+        it('does nothing when a command is already processing for the serial number', () => {
+            (service as any).commandQueues.set('aabbccddeeff', [{ command: { operatingMode: 'NIGHT' }, timestamp: Date.now() }]);
+            (service as any).processingCommands.set('aabbccddeeff', { command: {}, timeoutId: setTimeout(() => undefined, 1000) });
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            (service as any).processNextCommand('aabbccddeeff');
+
+            expect(listener).not.toHaveBeenCalled();
+        });
     });
 
     describe('getOperatingMode uses device mode when opMode has no operatingMode', () => {
@@ -253,6 +335,18 @@ describe('DeviceCommandService', () => {
             expect(listener).not.toHaveBeenCalled();
         });
 
+        it('does not throw if storage yields undefined devices', () => {
+            mockStorage.getDevices.mockImplementation(
+                (cb: (dtos: DeviceDto[] | undefined) => void) => cb(undefined)
+            );
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            expect(() => eventService.deviceWeatherUpdate({ temperature: 20, humidity: 50, airQuality: 0 })).not.toThrow();
+            expect(listener).not.toHaveBeenCalled();
+        });
+
         it('sends 13-byte weather buffer per device', () => {
             mockStorage.getDevices.mockImplementation(
                 (cb: (dtos: DeviceDto[]) => void) => cb([makeDto()])
@@ -325,6 +419,47 @@ describe('DeviceCommandService', () => {
             });
 
             expect(capturedData?.length).toBe(15);
+        });
+    });
+
+    describe('empty serialNumber edge case (buffer builders)', () => {
+        it('getUpdateBufferData skips serial encoding when serialNumber is empty', () => {
+            const device = makeDevice('');
+            const buffer = (service as any).getUpdateBufferData({ operatingMode: 'NIGHT' }, device);
+            expect(buffer.length).toBe(13);
+        });
+
+        it('getFilterResetBufferData skips serial encoding when serialNumber is empty', () => {
+            const buffer = (service as any).getFilterResetBufferData('');
+            expect(buffer.length).toBe(9);
+        });
+
+        it('getWeatherUpdateBufferData skips serial encoding when serialNumber is empty', () => {
+            const buffer = (service as any).getWeatherUpdateBufferData('', { temperature: 20, humidity: 50, airQuality: 0 });
+            expect(buffer.length).toBe(13);
+        });
+
+        it('getDeviceSetupBufferData skips serial encoding when serialNumber is empty', () => {
+            const buffer = (service as any).getDeviceSetupBufferData({
+                serialNumber: '', deviceRole: 'MASTER', zoneIndex: 0, houseId: 1,
+            });
+            expect(buffer.length).toBe(15);
+        });
+    });
+
+    describe('unknown fanSpeed falls back to device.fanSpeed in the warn message', () => {
+        it('warns using the device fanSpeed value when opMode.fanSpeed is undefined and device.fanSpeed is invalid', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => {
+                    const dto = makeDto();
+                    dto.fanSpeed = 'BOGUS';
+                    cb(dto);
+                }
+            );
+
+            eventService.deviceOperatingModeUpdate({}, 'aabbccddeeff');
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown fanSpeed value BOGUS'));
         });
     });
 });
