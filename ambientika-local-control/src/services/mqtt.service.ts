@@ -26,6 +26,11 @@ interface DeviceSetupJsonDto {
 
 export class MqttService {
 
+    // UDP broadcasts (the authoritative source for fan_status/fan_mode) arrive roughly
+    // every ~30s from a master device; suppress the TCP-derived fallback for this long
+    // after the last one seen for a serial so it doesn't flip-flop between vocabularies.
+    private static readonly UDP_FRESHNESS_WINDOW_MS = 60000;
+
     private mqttConnectionString = process.env.MQTT_CONNECTION_STRING || 'localhost';
     private mqttUsername = process.env.MQTT_USERNAME;
     private mqttPassword = process.env.MQTT_PASSWORD;
@@ -38,6 +43,7 @@ export class MqttService {
     private readonly deviceTopicSubscriptions: Set<string> = new Set<string>();
     private readonly deviceZones: Map<string, number> = new Map();
     private readonly deviceHouseIds: Map<string, number> = new Map();
+    private readonly lastUdpBroadcastAt: Map<string, number> = new Map();
 
     constructor(private log: Logger,
                 private eventService: EventService,
@@ -261,22 +267,14 @@ export class MqttService {
     }
 
     private sendDeviceOperatingMode(device: Device) {
-        // Slave devices show their role instead of the operating mode — the role is stable and
-        // informative, whereas the operating mode reflects the master's real-time direction command.
-        if (this.isSlave(device)) {
-            this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
-                device.deviceRole);
-            return;
-        }
+        // Publish the actual operating mode for every device, master or slave — a device role
+        // is not an operating mode. Slaves already have their own dedicated device_role topic
+        // (sendDeviceRole), so preset_mode no longer doubles as a role indicator (see #45).
         // Check if we have a stored command that should override the device's reported mode
         const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
         const modeToPublish = storedMode || device.operatingMode;
         this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
             modeToPublish);
-    }
-
-    private isSlave(device: Device): boolean {
-        return device.deviceRole === 'SLAVE_OPPOSITE_MASTER' || device.deviceRole === 'SLAVE_EQUAL_MASTER';
     }
 
     private sendDeviceFanSpeed(device: Device) {
@@ -391,14 +389,20 @@ export class MqttService {
             device.deviceRole);
     }
 
+    private isUdpDataFresh(serialNumber: string): boolean {
+        const lastSeen = this.lastUdpBroadcastAt.get(serialNumber);
+        return lastSeen !== undefined && Date.now() - lastSeen < MqttService.UDP_FRESHNESS_WINDOW_MS;
+    }
+
     private sendFanStatusFromDevice(device: Device) {
-        // Slave devices show their role — their fan direction is dictated by the master.
-        if (this.isSlave(device)) {
-            this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, device.serialNumber),
-                device.deviceRole);
+        // UDP broadcasts are the authoritative source for fan_status (real FanStatus enum
+        // values); only fall back to this TCP-derived approximation when no broadcast has
+        // been seen recently for this serial, so the topic doesn't flip-flop between the
+        // two vocabularies (see #45). A device role is not a fan status, so — unlike the
+        // old behavior — slaves get the same derived value as any other device here.
+        if (this.isUdpDataFresh(device.serialNumber)) {
             return;
         }
-        // Derive fan status from device operating mode as fallback
         let fanStatus = 'OFF';
         if (device.operatingMode !== 'OFF') {
             fanStatus = device.fanSpeed === 'HIGH' ? 'HIGH' :
@@ -409,7 +413,10 @@ export class MqttService {
     }
 
     private sendFanModeFromDevice(device: Device) {
-        // Derive fan mode from device operating mode as fallback
+        // Same UDP-freshness suppression as sendFanStatusFromDevice — see #45.
+        if (this.isUdpDataFresh(device.serialNumber)) {
+            return;
+        }
         let fanMode = 'OFF';
         if (device.operatingMode !== 'OFF') {
             fanMode = device.operatingMode === 'AUTO' ? 'AUTO' : 'MANUAL';
@@ -420,6 +427,7 @@ export class MqttService {
 
     private sendFanStatus(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
+            this.lastUdpBroadcastAt.set(deviceBroadcastStatus.serialNumber, Date.now());
             this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, deviceBroadcastStatus.serialNumber),
                 (deviceBroadcastStatus.fanStatus ?? 'UNKNOWN').toString());
         }
@@ -427,6 +435,7 @@ export class MqttService {
 
     private sendFanMode(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
+            this.lastUdpBroadcastAt.set(deviceBroadcastStatus.serialNumber, Date.now());
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, deviceBroadcastStatus.serialNumber),
                 (deviceBroadcastStatus.fanMode ?? 'UNKNOWN').toString());
         }

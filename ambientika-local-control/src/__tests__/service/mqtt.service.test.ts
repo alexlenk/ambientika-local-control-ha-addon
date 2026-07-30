@@ -566,6 +566,109 @@ describe('MqttService', () => {
         });
     });
 
+    describe('fan_status/fan_mode vocabulary fix (#45)', () => {
+        beforeEach(() => {
+            process.env.FAN_STATUS_TOPIC = 'ambientika/%serialNumber/fan-status';
+            process.env.FAN_MODE_TOPIC = 'ambientika/%serialNumber/fan-mode';
+            process.env.PRESET_MODE_STATE_TOPIC = 'ambientika/%serialNumber/preset/state';
+            process.env.MODE_STATE_TOPIC = 'ambientika/%serialNumber/mode/state';
+            process.env.ACTION_STATE_TOPIC = 'ambientika/%serialNumber/action';
+            process.env.FAN_MODE_STATE_TOPIC = 'ambientika/%serialNumber/fan-mode/state';
+            process.env.CURRENT_TEMPERATURE_TOPIC = 'ambientika/%serialNumber/temperature';
+            process.env.CURRENT_HUMIDITY_TOPIC = 'ambientika/%serialNumber/humidity';
+            process.env.TARGET_HUMIDITY_STATE_TOPIC = 'ambientika/%serialNumber/target-humidity/state';
+            process.env.CURRENT_HUMIDITY_LEVEL_TOPIC = 'ambientika/%serialNumber/humidity-level';
+            process.env.CURRENT_AIR_QUALITY_TOPIC = 'ambientika/%serialNumber/air-quality';
+            process.env.HUMIDITY_ALARM_TOPIC = 'ambientika/%serialNumber/humidity-alarm';
+            process.env.FILTER_STATUS_TOPIC = 'ambientika/%serialNumber/filter-status';
+            process.env.NIGHT_ALARM_TOPIC = 'ambientika/%serialNumber/night-alarm';
+            process.env.LIGHT_SENSITIVITY_TOPIC = 'ambientika/%serialNumber/light-sensitivity/state';
+            process.env.AVAILABILITY_TOPIC = 'ambientika/%serialNumber/availability';
+        });
+
+        it('suppresses the TCP-derived fan_status fallback while a UDP broadcast is fresh', () => {
+            const broadcast = new DeviceBroadcastStatus('aabbccddeeff', ['aabbccddeeff'], 0, 'ALTERNATING', 'INTAKE_HIGH');
+            eventService.deviceBroadcastStatus(broadcast);
+            mockMqttClient.publish.mockClear();
+
+            const device = makeDevice('aabbccddeeff');
+            device.fanSpeed = 'HIGH';
+            (service as any).deviceTopicSubscriptions.add(device.serialNumber);
+            eventService.deviceStatusUpdate(device);
+
+            const fanStatusCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('fan-status')
+            );
+            expect(fanStatusCalls.length).toBe(0);
+        });
+
+        it('suppresses the TCP-derived fan_mode fallback while a UDP broadcast is fresh', () => {
+            const broadcast = new DeviceBroadcastStatus('aabbccddeeff', ['aabbccddeeff'], 0, 'ALTERNATING', 'INTAKE_HIGH');
+            eventService.deviceBroadcastStatus(broadcast);
+            mockMqttClient.publish.mockClear();
+
+            const device = makeDevice('aabbccddeeff');
+            (service as any).deviceTopicSubscriptions.add(device.serialNumber);
+            eventService.deviceStatusUpdate(device);
+
+            const fanModeCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.endsWith('/fan-mode')
+            );
+            expect(fanModeCalls.length).toBe(0);
+        });
+
+        it('resumes the TCP-derived fallback once the UDP broadcast is no longer fresh', () => {
+            vi.useFakeTimers();
+            try {
+                const broadcast = new DeviceBroadcastStatus('aabbccddeeff', ['aabbccddeeff'], 0, 'ALTERNATING', 'INTAKE_HIGH');
+                eventService.deviceBroadcastStatus(broadcast);
+                vi.advanceTimersByTime(60000);
+                mockMqttClient.publish.mockClear();
+
+                const device = makeDevice('aabbccddeeff');
+                device.fanSpeed = 'HIGH';
+                (service as any).deviceTopicSubscriptions.add(device.serialNumber);
+                eventService.deviceStatusUpdate(device);
+
+                const fanStatusCalls = mockMqttClient.publish.mock.calls.filter(
+                    ([topic]: [string]) => topic.includes('fan-status')
+                );
+                expect(fanStatusCalls.some(([, msg]: [string, string]) => msg === 'HIGH')).toBe(true);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('publishes the derived fan status/mode for slave devices instead of the device role', () => {
+            const device = makeDevice('aabbccddeeff');
+            device.deviceRole = 'SLAVE_OPPOSITE_MASTER';
+            device.operatingMode = 'AUTO';
+            device.fanSpeed = 'HIGH';
+            (service as any).deviceTopicSubscriptions.add(device.serialNumber);
+            eventService.deviceStatusUpdate(device);
+
+            const fanStatusCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('fan-status')
+            );
+            expect(fanStatusCalls.some(([, msg]: [string, string]) => msg === 'SLAVE_OPPOSITE_MASTER')).toBe(false);
+            expect(fanStatusCalls.some(([, msg]: [string, string]) => msg === 'HIGH')).toBe(true);
+        });
+
+        it('publishes the actual operating mode for slave devices on preset_mode instead of the role', () => {
+            const device = makeDevice('aabbccddeeff');
+            device.deviceRole = 'SLAVE_OPPOSITE_MASTER';
+            device.operatingMode = 'NIGHT';
+            (service as any).deviceTopicSubscriptions.add(device.serialNumber);
+            eventService.deviceStatusUpdate(device);
+
+            const presetCalls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('preset/state')
+            );
+            expect(presetCalls.some(([, msg]: [string, string]) => msg === 'SLAVE_OPPOSITE_MASTER')).toBe(false);
+            expect(presetCalls.some(([, msg]: [string, string]) => msg === 'NIGHT')).toBe(true);
+        });
+    });
+
     describe('sendFanMode / sendFanStatus with undefined broadcast fields (regression for #31)', () => {
         it('does not crash when a broadcast carries an undefined fanMode (e.g. device sent an unmapped enum value)', () => {
             process.env.FAN_MODE_TOPIC = 'ambientika/%serialNumber/fan-mode';
