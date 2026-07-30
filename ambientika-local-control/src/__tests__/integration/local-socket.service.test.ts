@@ -62,6 +62,18 @@ function make18ByteBuffer(sn = 'aabbccddeeff'): Buffer {
     return buf;
 }
 
+// Build a valid 19-byte legacy status buffer (firmware 0.0.11, #36)
+function make19ByteBuffer(sn = 'aabbccddeeff'): Buffer {
+    const buf = Buffer.alloc(19);
+    const octets = sn.match(/.{2}/g) || [];
+    for (let i = 0; i < 6; i++) {
+        buf[2 + i] = parseInt(octets[i] || '00', 16);
+    }
+    buf[8] = 1;  // OperatingMode.AUTO
+    buf[9] = 0;  // FanSpeed.LOW
+    return buf;
+}
+
 describe('LocalSocketService', () => {
     let service: LocalSocketService;
     let eventService: EventService;
@@ -167,6 +179,28 @@ describe('LocalSocketService', () => {
 
         it('21-byte data: does NOT log an unrecognized-length warning', () => {
             socketHandlers['data']?.(make21ByteBuffer());
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
+
+        it('19-byte data: emits deviceStatusUpdate event (legacy firmware 0.0.11, #36)', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, listener);
+
+            socketHandlers['data']?.(make19ByteBuffer());
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('19-byte data: maps serial number to connection key', () => {
+            socketHandlers['data']?.(make19ByteBuffer('aabbccddeeff'));
+
+            const deviceConnections = (service as any).deviceConnections;
+            expect(deviceConnections.has('aabbccddeeff')).toBe(true);
+        });
+
+        it('19-byte data: does NOT log an unrecognized-length warning', () => {
+            socketHandlers['data']?.(make19ByteBuffer());
 
             expect(mockLog.warn).not.toHaveBeenCalled();
         });

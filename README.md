@@ -153,6 +153,8 @@ For cloud API and provisioning architecture see [`CLOUD-INTEGRATION.md`](CLOUD-I
 | 19 | Light sensitivity |
 | 20 | Signal strength |
 
+> **Legacy 19-byte variant:** devices on older radio/micro firmware (observed on `0.0.11`) send a truncated 19-byte status packet — identical to the layout above through byte 18, but without the `lightSensitivity`/`signalStrength` fields. The add-on handles both lengths; on the 19-byte variant, `lightSensitivity` defaults to `NOT_AVAILABLE` and `signalStrength` to `0`. (#36)
+
 ---
 
 ## MQTT Topics

@@ -88,6 +88,8 @@ Example: `01 00 ab cd ef ab cd ef 01 02 01 14 37 02 01 00 00 00 01 03 c3`
 | 19     | 1      | Light sensitivity   | uint8  | See LightSensitivity enum          |
 | 20     | 1      | WiFi signal (mW)    | uint8  |                                    |
 
+**Legacy 19-byte variant:** older radio/micro firmware (observed on `0.0.11`) sends this message truncated to 19 bytes — bytes 0–18 are identical, but bytes 19–20 (light sensitivity, WiFi signal) are omitted entirely rather than zero-filled. The add-on defaults `lightSensitivity` to `NOT_AVAILABLE` and `signalStrength` to `0` for this variant. (#36)
+
 ---
 
 ## Device setup packet (15 or 16 bytes)

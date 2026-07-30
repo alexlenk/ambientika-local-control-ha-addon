@@ -47,8 +47,15 @@ export class DeviceMapper {
         }
         const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
         const lastOperatingMode = OperatingMode[this.getIntFromBufferSlice(18, 19)];
-        const lightSensitivity = LightSensitivity[this.getIntFromBufferSlice(19, 20)];
-        const signalStrength = this.getIntFromBufferSlice(20, 21);
+        // Firmware 0.0.11 sends a 19-byte status packet with no lightSensitivity/signalStrength
+        // fields (see #36). Default them explicitly instead of falling through to the generic
+        // short-buffer fallback, which would log a warning on every periodic status packet.
+        const lightSensitivity = data.length >= 20
+            ? LightSensitivity[this.getIntFromBufferSlice(19, 20)]
+            : LightSensitivity[LightSensitivity.NOT_AVAILABLE];
+        const signalStrength = data.length >= 21
+            ? this.getIntFromBufferSlice(20, 21)
+            : 0;
         return new Device(
             serialNumber,
             operatingMode,

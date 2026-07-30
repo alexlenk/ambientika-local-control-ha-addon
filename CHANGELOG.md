@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.21 - Support 19-byte legacy status packet (firmware 0.0.11)
+
+#### Fixed
+- **Local socket / device mapper**: devices on older radio/micro firmware (observed on `0.0.11`) send a 19-byte status packet instead of 21 bytes — identical layout through byte 18, but missing the `lightSensitivity`/`signalStrength` fields. These packets were previously dropped entirely (only a `warn` log, never reaching the DB or MQTT), so affected devices connected successfully but never produced any entities. The add-on now accepts both 19- and 21-byte status packets, defaulting `lightSensitivity` to `NOT_AVAILABLE` and `signalStrength` to `0` for the legacy variant. (#36)
+
+---
+
 ### Version 1.1.20 - Drop unnecessary NET_ADMIN privilege
 
 #### Changed

@@ -132,7 +132,7 @@ export class LocalSocketService {
                 this.deviceConnections.set(deviceInfo.serialNumber, connectionKey);
                 this.log.debug(`Mapped device ${deviceInfo.serialNumber} to connection ${connectionKey}`);
             }
-            if (data.length === 21) {
+            if (data.length === 19 || data.length === 21) {
                 const remoteAddress = serverSocket.remoteAddress || '';
                 const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
                 const device = this.deviceMapper.deviceFromSocketBuffer(data, remoteAddress);
@@ -144,12 +144,12 @@ export class LocalSocketService {
 
                 this.eventService.deviceStatusUpdate(device);
             }
-            if (data.length !== 18 && data.length !== 21) {
+            if (data.length !== 18 && data.length !== 19 && data.length !== 21) {
                 // Device data of an unrecognized length is silently unusable — it never reaches
                 // deviceStatusUpdate, so it's never saved to the DB or published to MQTT. Surface
                 // it at warn level (instead of only the silly-level dump above) so a device sending
                 // an unexpected packet format is visible without needing silly logging enabled.
-                this.log.warn(`Received ${data.length}-byte packet from ${serverSocket.remoteAddress}:${serverSocket.remotePort} with no known handler (expected 18 or 21 bytes): ${data.toString('hex')}`);
+                this.log.warn(`Received ${data.length}-byte packet from ${serverSocket.remoteAddress}:${serverSocket.remotePort} with no known handler (expected 18, 19 or 21 bytes): ${data.toString('hex')}`);
             }
         });
     }
