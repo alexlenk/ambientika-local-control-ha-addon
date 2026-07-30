@@ -33,6 +33,7 @@ options:
   udp_broadcast_start_port: 45000
   log_level: info
   log_full_serials: false
+  enable_raw_commands: false
 schema:
   mqtt_host: str
   mqtt_port: int(1,65535)
@@ -47,4 +48,5 @@ schema:
   udp_broadcast_start_port: int(1,65535)
   log_level: list(silly|debug|info|warn|error)?
   log_full_serials: bool?
+  enable_raw_commands: bool?
 source_url: https://github.com/sragas/ambientika-local-control

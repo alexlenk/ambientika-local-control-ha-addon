@@ -190,6 +190,13 @@ ambientika/{serialNumber}/raw_command/set
 02001234567890ab00020200102f0000
 ```
 
+Disabled by default — set `enable_raw_commands: true` to turn it on. Any hex payload
+published here is written straight to the device's TCP socket with no validation beyond
+hex-format and a 32-byte length limit, bypassing all the modeled/validated command paths.
+On a broker with weak or anonymous ACLs (common in home setups), MQTT publish access
+becomes unrestricted device control — only enable this if you trust everyone with publish
+access to your broker, and prefer requiring broker authentication regardless.
+
 ---
 
 ## Development & Versioning

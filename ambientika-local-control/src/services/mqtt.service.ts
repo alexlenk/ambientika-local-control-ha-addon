@@ -30,6 +30,10 @@ export class MqttService {
     // every ~30s from a master device; suppress the TCP-derived fallback for this long
     // after the last one seen for a serial so it doesn't flip-flop between vocabularies.
     private static readonly UDP_FRESHNESS_WINDOW_MS = 60000;
+    // Arbitrary raw protocol access is a control primitive — any MQTT publish access
+    // (including anonymous/weak broker ACLs common in home setups) becomes unrestricted
+    // device control unless enable_raw_commands is explicitly turned on. See #42.
+    private static readonly MAX_RAW_COMMAND_BYTES = 32;
 
     private mqttConnectionString = process.env.MQTT_CONNECTION_STRING || 'localhost';
     private mqttUsername = process.env.MQTT_USERNAME;
@@ -49,6 +53,9 @@ export class MqttService {
                 private eventService: EventService,
                 private deviceStorageService: DeviceStorageService) {
         this.log.debug(`Initializing MqttService`);
+        this.log.info(process.env.ENABLE_RAW_COMMANDS === 'true'
+            ? 'MQTT raw_command topic is enabled — any broker publish access can send arbitrary bytes to devices'
+            : 'MQTT raw_command topic is disabled (enable_raw_commands)');
         this.deviceMapper = new DeviceMapper(this.log);
         this.hAAutoDiscoveryService = new HAAutoDiscoveryService(this);
         this.connect();
@@ -504,7 +511,9 @@ export class MqttService {
         topics.push((process.env.FILTER_RESET_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_JSON_TOPIC || '').replace('%serialNumber', serialNumber));
-        topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        if (process.env.ENABLE_RAW_COMMANDS === 'true') {
+            topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        }
         topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
@@ -643,14 +652,22 @@ export class MqttService {
     }
 
     private handleRawCommand(serialNumber: string, message: Buffer): void {
+        if (process.env.ENABLE_RAW_COMMANDS !== 'true') {
+            this.log.warn(`Raw command received for ${serialNumber} but raw commands are disabled (enable_raw_commands); ignoring`);
+            return;
+        }
         try {
             const hexString = message.toString().trim();
-            this.log.info(`Raw command received for ${serialNumber}: ${hexString}`);
-            
+            this.log.debug(`Raw command received for ${serialNumber}: ${hexString}`);
+
             // Convert hex string to buffer
             const commandBuffer = this.hexStringToBuffer(hexString);
             if (commandBuffer) {
-                this.log.info(`Sending raw command to ${serialNumber}: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
+                if (commandBuffer.length > MqttService.MAX_RAW_COMMAND_BYTES) {
+                    this.log.error(`Raw command for ${serialNumber} rejected: ${commandBuffer.length} bytes exceeds the ${MqttService.MAX_RAW_COMMAND_BYTES}-byte limit`);
+                    return;
+                }
+                this.log.debug(`Sending raw command to ${serialNumber}: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
                 this.sendRawCommandToDevice(serialNumber, commandBuffer);
             } else {
                 this.log.error(`Invalid hex string format for ${serialNumber}: ${hexString}`);
@@ -701,31 +718,31 @@ export class MqttService {
     }
 
     private logBufferAnalysis(buffer: Buffer, serialNumber: string): void {
-        this.log.info(`=== RAW COMMAND ANALYSIS for ${serialNumber} ===`);
-        this.log.info(`Buffer length: ${buffer.length} bytes`);
-        this.log.info(`Hex: ${buffer.toString('hex')}`);
-        
+        this.log.debug(`=== RAW COMMAND ANALYSIS for ${serialNumber} ===`);
+        this.log.debug(`Buffer length: ${buffer.length} bytes`);
+        this.log.debug(`Hex: ${buffer.toString('hex')}`);
+
         // Byte-by-byte analysis
         for (let i = 0; i < buffer.length; i++) {
             const byte = buffer[i] as number;
-            this.log.info(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
+            this.log.debug(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
         }
 
         // Common pattern analysis
         if (buffer.length >= 8) {
             const possibleSerial = buffer.slice(2, 8).toString('hex');
-            this.log.info(`Possible serial number (bytes 2-7): ${possibleSerial}`);
+            this.log.debug(`Possible serial number (bytes 2-7): ${possibleSerial}`);
         }
 
         if (buffer.length >= 2) {
             const byte0 = buffer[0] as number;
             const byte1 = buffer[1] as number;
-            this.log.info(`Header (bytes 0-1): 0x${byte0.toString(16).padStart(2, '0')} 0x${byte1.toString(16).padStart(2, '0')}`);
+            this.log.debug(`Header (bytes 0-1): 0x${byte0.toString(16).padStart(2, '0')} 0x${byte1.toString(16).padStart(2, '0')}`);
         }
 
         if (buffer.length >= 9) {
             const byte8 = buffer[8] as number;
-            this.log.info(`Command byte (byte 8): 0x${byte8.toString(16).padStart(2, '0')} (${byte8})`);
+            this.log.debug(`Command byte (byte 8): 0x${byte8.toString(16).padStart(2, '0')} (${byte8})`);
         }
     }
 

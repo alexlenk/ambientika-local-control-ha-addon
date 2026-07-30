@@ -133,6 +133,25 @@ describe('MqttService', () => {
         });
     });
 
+    describe('getSubscriptionTopics raw_command gating (#42)', () => {
+        afterEach(() => {
+            delete process.env.ENABLE_RAW_COMMANDS;
+        });
+
+        it('does not include RAW_COMMAND_TOPIC when enable_raw_commands is not set', () => {
+            process.env.RAW_COMMAND_TOPIC = 'ambientika/%serialNumber/raw';
+            const topics: string[] = (service as any).getSubscriptionTopics('aabbccddeeff');
+            expect(topics).not.toContain('ambientika/aabbccddeeff/raw');
+        });
+
+        it('includes RAW_COMMAND_TOPIC when enable_raw_commands=true', () => {
+            process.env.RAW_COMMAND_TOPIC = 'ambientika/%serialNumber/raw';
+            process.env.ENABLE_RAW_COMMANDS = 'true';
+            const topics: string[] = (service as any).getSubscriptionTopics('aabbccddeeff');
+            expect(topics).toContain('ambientika/aabbccddeeff/raw');
+        });
+    });
+
     describe('getHumidityLevel', () => {
         it('returns DRY for humidity <= 40', () => {
             expect((service as any).getHumidityLevel('40')).toBe('0'); // HumidityLevel.DRY = 0
@@ -722,7 +741,57 @@ describe('MqttService', () => {
             process.env.DEVICE_SETUP_COMMAND_TOPIC = 'ambientika/%serialNumber/setup';
             process.env.DEVICE_SETUP_JSON_TOPIC = 'ambientika/%serialNumber/setup-json';
             process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC = 'ambientika/%serialNumber/light-sensitivity/set';
+            process.env.ENABLE_RAW_COMMANDS = 'true';
             (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+        });
+
+        afterEach(() => {
+            delete process.env.ENABLE_RAW_COMMANDS;
+        });
+
+        it('is disabled by default: warns and does not emit localSocketDataUpdate', () => {
+            delete process.env.ENABLE_RAW_COMMANDS;
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/raw',
+                Buffer.from('0200aabbccddeeff01010000')
+            );
+
+            expect(listener).not.toHaveBeenCalled();
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('raw commands are disabled'));
+        });
+
+        it('rejects a payload exceeding the 32-byte limit', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+            const oversizedHex = '00'.repeat(33); // 33 bytes > 32-byte limit
+
+            mqttEventHandlers['message']?.('ambientika/aabbccddeeff/raw', Buffer.from(oversizedHex));
+
+            expect(listener).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('exceeds the 32-byte limit'));
+        });
+
+        it('accepts a payload exactly at the 32-byte limit', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb({
+                    id: 1, serialNumber: 'aabbccddeeff', status: 'ONLINE',
+                    lastUpdate: new Date().toISOString(), firstSeen: new Date().toISOString(),
+                    operatingMode: 'AUTO', fanSpeed: 'LOW', humidityLevel: 'NORMAL',
+                    temperature: 22, humidity: 55, airQuality: 'GOOD', humidityAlarm: false,
+                    filterStatus: 'GOOD', nightAlarm: false, deviceRole: 'MASTER',
+                    remoteAddress: '192.168.1.1', lastOperatingMode: 'SMART', lightSensitivity: 'LOW',
+                })
+            );
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+            const exactLimitHex = '00'.repeat(32);
+
+            mqttEventHandlers['message']?.('ambientika/aabbccddeeff/raw', Buffer.from(exactLimitHex));
+
+            expect(listener).toHaveBeenCalled();
         });
 
         it('emits localSocketDataUpdate for valid hex command', () => {

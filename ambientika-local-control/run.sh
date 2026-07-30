@@ -41,6 +41,7 @@ LOCAL_SOCKET_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.local_socket_port /
 UDP_BROADCAST_START_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.udp_broadcast_start_port // 45000')
 LOG_LEVEL=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_level // "info"')
 LOG_FULL_SERIALS=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_full_serials // false')
+ENABLE_RAW_COMMANDS=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.enable_raw_commands // false')
 
 log_info "🔧 Configuration loaded:"
 log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
@@ -61,6 +62,7 @@ LOCAL_SOCKET_PORT=${LOCAL_SOCKET_PORT}
 REST_API_PORT=${REST_API_PORT}
 LOG_LEVEL=${LOG_LEVEL}
 LOG_FULL_SERIALS=${LOG_FULL_SERIALS}
+ENABLE_RAW_COMMANDS=${ENABLE_RAW_COMMANDS}
 
 CLOUD_SYNC_ENABLED=${CLOUD_SYNC_ENABLED}
 REMOTE_CLOUD_SOCKET_PORT=${CLOUD_PORT}
