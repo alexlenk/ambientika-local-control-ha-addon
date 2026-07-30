@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.2.0 - Reliability hardening: graceful shutdown, crash handlers, REST/MQTT security, node:sqlite
+
+#### Added
+- **Graceful shutdown**: `SIGTERM`/`SIGINT` now trigger an ordered teardown of every service (local socket → UDP broadcast → scheduler → MQTT → remote socket → REST → SQLite) instead of an abrupt exit, with a 10s hard-exit timeout guard in case a service hangs. (#39)
+- **Crash handlers and health endpoint**: `uncaughtException`/`unhandledRejection` are now caught and logged instead of silently killing the process; a new `GET /health` REST endpoint (never auth-gated) reports uptime and device count, wired up as the add-on's Supervisor `watchdog` for automatic restart on hang. (#40)
+- **REST API hardening**: request bodies are now validated against the real protocol enums (rejecting the internal `LAST` sentinel), `serialNumber` route params are centrally validated/normalized, and the API can optionally be bound to a specific interface (`rest_api_bind`) and gated behind a bearer token (`rest_api_token`). Debug-only endpoints (e.g. cloud setup injection) are now opt-in via `enable_debug_endpoints` and off by default. (#41)
+- **MQTT `raw_command` topic is now opt-in** via `enable_raw_commands` (default off) — previously any MQTT publish access (including weak/anonymous broker ACLs common in home setups) could send arbitrary bytes directly to a device. (#42)
+- **Serial number masking in logs**: device serial numbers are masked in all log output by default; set `log_full_serials: true` to see them unmasked for debugging. (#43)
+- **Cloud relay reconnect with backoff**: the cloud relay socket now reconnects automatically with exponential backoff (5s–60s) after a disconnect instead of leaving the relay dead until the next local reconnect, and rate-limits its "socket not found" warning instead of spamming logs. (#44)
+
+#### Fixed
+- **MQTT `fan_status`/`fan_mode` vocabulary mixing**: TCP-derived and UDP-broadcast-derived values used different vocabularies and could flip-flop on the same topic; UDP broadcasts (the authoritative source) now suppress the TCP-derived fallback for 60s after the last broadcast seen for a device, and slave devices publish their actual fan status/mode instead of their device role. (#45)
+- **Dependency vulnerabilities**: replaced the native `sqlite3` package with Node's built-in `node:sqlite`, removing the last native-compile dependency from the Docker build; removed the unused `node-ble` BLE-provisioning dependency (now a standalone-install script) and `@tsconfig/node20`; upgraded `vitest`/`@vitest/coverage-v8` to v4. (#47, #50)
+
+#### Changed
+- **CI hardening**: added a lint gate ahead of the Docker build, pinned all GitHub Actions to commit SHAs, added a fork-PR guard so untrusted PRs can't attempt to push images, and added Dependabot for npm/GitHub Actions/Docker. (#46)
+- **TypeScript/ESLint hardening**: enabled `noUncheckedIndexedAccess`, `strictPropertyInitialization`, `noImplicitReturns`, and `noFallthroughCasesInSwitch`; fixed the resulting type errors; cleaned up dead code and lint violations across the codebase. (#48)
+- **Test coverage**: pushed from ~94% to 100% statements/lines, 99.83% branches, and 99.62% functions — added targeted tests for error paths, enum-fallback branches, and previously-untested edge cases across every service.
+
+---
+
 ### Version 1.1.21 - Fix local_socket_port, stale cloud host IP, and legacy 19-byte status packet
 
 #### Fixed
