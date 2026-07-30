@@ -40,6 +40,7 @@ REST_API_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.rest_api_port // 3000')
 LOCAL_SOCKET_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.local_socket_port // 11000')
 UDP_BROADCAST_START_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.udp_broadcast_start_port // 45000')
 LOG_LEVEL=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_level // "info"')
+LOG_FULL_SERIALS=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.log_full_serials // false')
 
 log_info "🔧 Configuration loaded:"
 log_info "  MQTT: $MQTT_HOST:$MQTT_PORT"
@@ -59,6 +60,7 @@ cat > /app/.env << EOF
 LOCAL_SOCKET_PORT=${LOCAL_SOCKET_PORT}
 REST_API_PORT=${REST_API_PORT}
 LOG_LEVEL=${LOG_LEVEL}
+LOG_FULL_SERIALS=${LOG_FULL_SERIALS}
 
 CLOUD_SYNC_ENABLED=${CLOUD_SYNC_ENABLED}
 REMOTE_CLOUD_SOCKET_PORT=${CLOUD_PORT}

@@ -16,6 +16,7 @@ import {FanStatus} from '../models/enum/fan-status.enum';
 import {FanMode} from '../models/enum/fan-mode.enum';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
 import {Logger} from 'winston';
+import {registerSerialForMasking} from './logger.service';
 
 export class DeviceMapper {
     private buffer!: Buffer;
@@ -181,7 +182,14 @@ export class DeviceMapper {
     private getHexStringFromBufferSlice(start: number, end: number): string {
         if (this.buffer.length >= end) {
             const slice = this.buffer.subarray(start, end)
-            return slice.toString('hex');
+            const hex = slice.toString('hex');
+            // Bytes 2-7 are always the device serial/MAC across every packet type this
+            // mapper parses — register it here so the logger can mask it everywhere,
+            // instead of registering at every individual call site (see #43).
+            if (start === 2 && end === 8) {
+                registerSerialForMasking(hex);
+            }
+            return hex;
         } else {
             this.log.warn(`Could not hex string from buffer ${this.buffer} slice ${start},${end} `)
             return '';

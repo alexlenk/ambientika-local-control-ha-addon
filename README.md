@@ -159,6 +159,23 @@ For cloud API and provisioning architecture see [`CLOUD-INTEGRATION.md`](CLOUD-I
 
 ---
 
+## Logging
+
+Device serial numbers are effectively credentials in this ecosystem — the vendor protocol
+is unauthenticated, and the add-on's REST/MQTT paths address devices purely by serial. To
+avoid leaking them when logs are shared (e.g. pasted into a GitHub issue), serials are
+**masked in all log output by default**, keeping the last 4 hex characters so multiple
+devices stay distinguishable (e.g. `xxxxxxxx50e0`). This covers plain log lines and serials
+embedded inside raw packet hex dumps.
+
+Set `log_full_serials: true` to see full serials in the logs (useful when debugging locally).
+
+> **Note:** this only affects log output. MQTT topic names and REST API paths still address
+> devices by their real serial number — masking log lines doesn't change how the add-on is
+> addressed over the network.
+
+---
+
 ## MQTT Topics
 
 ### Device setup command

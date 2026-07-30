@@ -7,6 +7,7 @@ import {EventService} from './event.service';
 import {OperatingModeDto} from '../dto/operating-mode.dto';
 import {DeviceDto} from '../dto/device.dto';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
+import {registerSerialForMasking} from './logger.service';
 
 dotenv.config()
 
@@ -44,6 +45,7 @@ export class RestService {
                 response.status(400).send('Missing serialNumber');
                 return;
             }
+            registerSerialForMasking(serialNumber);
             this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
                 (existingDevice: DeviceDto | undefined) => {
                     if (existingDevice) {
@@ -60,6 +62,7 @@ export class RestService {
                 response.status(400).send('Missing serialNumber');
                 return;
             }
+            registerSerialForMasking(serialNumber);
             this.eventService.deviceOperatingModeUpdate(request.body as OperatingModeDto, serialNumber);
             response.send();
 
@@ -71,6 +74,7 @@ export class RestService {
                 response.status(400).send('Missing serialNumber');
                 return;
             }
+            registerSerialForMasking(serialNumber);
             this.eventService.deviceFilterReset(serialNumber);
             response.send();
         });
@@ -88,6 +92,7 @@ export class RestService {
                 return;
             }
             const serialNumber = request.params.serialNumber.toLowerCase();
+            registerSerialForMasking(serialNumber);
             const { role = 0, zone = 0, houseId = 0 } = request.body;
             this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber, (device) => {
                 if (!device || !device.remoteAddress) {
