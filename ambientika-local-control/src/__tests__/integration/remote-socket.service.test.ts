@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppEvents } from '../../models/enum/app-events.enum';
 
 // Capture remote socket event handlers
@@ -311,6 +311,131 @@ describe('RemoteSocketService', () => {
 
                 expect(mockRemoteSocket.destroy).toHaveBeenCalled();
                 expect((svc as any).clients.size).toBe(0);
+            });
+
+            it('cancels any pending reconnect timers', async () => {
+                vi.useFakeTimers();
+                try {
+                    const svc = new RemoteSocketService(mockLog, eventService);
+                    eventService.localSocketConnected('192.168.1.100');
+                    const err = Object.assign(new Error('reset'), { code: 'ECONNRESET' });
+                    remoteSocketHandlers['error']?.(err);
+                    expect((svc as any).reconnectTimers.size).toBe(1);
+
+                    svc.close();
+
+                    expect((svc as any).reconnectTimers.size).toBe(0);
+                    const net = await import('node:net');
+                    const callsBefore = (net.Socket as any).mock.calls.length;
+                    vi.advanceTimersByTime(60000);
+                    expect((net.Socket as any).mock.calls.length).toBe(callsBefore);
+                } finally {
+                    vi.useRealTimers();
+                }
+            });
+        });
+
+        describe('reconnect with backoff', () => {
+            beforeEach(() => {
+                vi.useFakeTimers();
+            });
+
+            afterEach(() => {
+                vi.useRealTimers();
+            });
+
+            it('schedules a reconnect at the initial delay after a fatal error', () => {
+                eventService.localSocketConnected('192.168.1.100');
+                const connectCallsBefore = mockRemoteSocket.connect.mock.calls.length;
+
+                const err = Object.assign(new Error('reset'), { code: 'ECONNRESET' });
+                remoteSocketHandlers['error']?.(err);
+
+                vi.advanceTimersByTime(4999);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore);
+
+                vi.advanceTimersByTime(1);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore + 1);
+            });
+
+            it('does not reconnect once the device has disconnected locally', () => {
+                eventService.localSocketConnected('192.168.1.100');
+                const connectCallsBefore = mockRemoteSocket.connect.mock.calls.length;
+
+                const err = Object.assign(new Error('reset'), { code: 'ECONNRESET' });
+                remoteSocketHandlers['error']?.(err);
+
+                eventService.localSocketDisconnected('192.168.1.100');
+
+                vi.advanceTimersByTime(60000);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore);
+            });
+
+            it('doubles the backoff delay on repeated failures, capped at 60s', () => {
+                eventService.localSocketConnected('192.168.1.100');
+
+                const fail = () => remoteSocketHandlers['error']?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+
+                fail(); // schedules at 5000ms, next delay becomes 10000ms
+                vi.advanceTimersByTime(5000);
+                const afterFirst = mockRemoteSocket.connect.mock.calls.length;
+
+                fail(); // should now schedule at 10000ms
+                vi.advanceTimersByTime(9999);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(afterFirst);
+                vi.advanceTimersByTime(1);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(afterFirst + 1);
+            });
+
+            it('resets the backoff delay after a successful connect', () => {
+                eventService.localSocketConnected('192.168.1.100');
+
+                remoteSocketHandlers['error']?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+                vi.advanceTimersByTime(5000); // first reconnect fires, delay would be 10000 next
+                remoteSocketHandlers['connect']?.(); // succeeds — backoff should reset
+
+                const connectCallsBefore = mockRemoteSocket.connect.mock.calls.length;
+                remoteSocketHandlers['error']?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+                vi.advanceTimersByTime(4999);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore);
+                vi.advanceTimersByTime(1);
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore + 1);
+            });
+
+            it('only emits REMOTE_SOCKET_CONNECTED/DISCONNECTED on actual state transitions', () => {
+                const connectedListener = vi.fn();
+                const disconnectedListener = vi.fn();
+                eventService.on(AppEvents.REMOTE_SOCKET_CONNECTED, connectedListener);
+                eventService.on(AppEvents.REMOTE_SOCKET_DISCONNECTED, disconnectedListener);
+
+                eventService.localSocketConnected('192.168.1.100');
+                remoteSocketHandlers['connect']?.();
+                remoteSocketHandlers['connect']?.(); // duplicate — should not re-emit
+
+                expect(connectedListener).toHaveBeenCalledTimes(1);
+
+                remoteSocketHandlers['close']?.();
+                remoteSocketHandlers['close']?.(); // already removed from clients, guard prevents re-entry anyway
+
+                expect(disconnectedListener).toHaveBeenCalledTimes(1);
+            });
+
+            it('rate-limits the "Cloud socket not found" warning to once per backoff window', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                mockLog.warn.mockClear();
+
+                (svc as any).write(Buffer.from('a'), '10.0.0.1');
+                (svc as any).write(Buffer.from('b'), '10.0.0.1');
+                (svc as any).write(Buffer.from('c'), '10.0.0.1');
+
+                const warnCalls = mockLog.warn.mock.calls.filter((c: any[]) => c[0].includes('not found'));
+                expect(warnCalls.length).toBe(1);
+                expect(mockLog.debug).toHaveBeenCalledWith(expect.stringContaining('already warned'));
+
+                vi.advanceTimersByTime(5000);
+                (svc as any).write(Buffer.from('d'), '10.0.0.1');
+                const warnCallsAfter = mockLog.warn.mock.calls.filter((c: any[]) => c[0].includes('not found'));
+                expect(warnCallsAfter.length).toBe(2);
             });
         });
     });
