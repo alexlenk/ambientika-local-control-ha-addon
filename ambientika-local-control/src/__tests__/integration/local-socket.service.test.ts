@@ -88,6 +88,24 @@ describe('LocalSocketService', () => {
         delete process.env.PORT;
     });
 
+    it('listens on LOCAL_SOCKET_PORT env when set', async () => {
+        process.env.LOCAL_SOCKET_PORT = '13000';
+        eventService = new EventService(mockLog);
+        new LocalSocketService(mockLog, eventService);
+        expect(mockServer.listen).toHaveBeenCalledWith(13000, '0.0.0.0', expect.any(Function));
+        delete process.env.LOCAL_SOCKET_PORT;
+    });
+
+    it('prefers LOCAL_SOCKET_PORT over legacy PORT when both are set', async () => {
+        process.env.LOCAL_SOCKET_PORT = '13000';
+        process.env.PORT = '12000';
+        eventService = new EventService(mockLog);
+        new LocalSocketService(mockLog, eventService);
+        expect(mockServer.listen).toHaveBeenCalledWith(13000, '0.0.0.0', expect.any(Function));
+        delete process.env.LOCAL_SOCKET_PORT;
+        delete process.env.PORT;
+    });
+
     describe('connection handling', () => {
         it('emits localSocketConnected with remoteAddress on connection', () => {
             const listener = vi.fn();
