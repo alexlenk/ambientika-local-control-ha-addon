@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
 
@@ -40,8 +40,9 @@ jobs:
 
       - name: Check if tag already exists
         id: tag_check
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
           if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
             echo "Tag $TAG already exists — skipping release."
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -52,16 +53,19 @@ jobs:
 
       - name: Create and push tag
         if: steps.tag_check.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Extract changelog for version
         if: steps.tag_check.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           awk -v ver="$VERSION" '
             /^### Version / {
               if ($0 ~ ("^### Version " ver "( |$|-)")) { found=1 }
@@ -74,7 +78,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.tag_check.outputs.skip == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
@@ -86,7 +90,8 @@ jobs:
         if: steps.tag_check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           gh workflow run build.yml \
-            --ref "${{ steps.version.outputs.tag }}" \
-            --field ref="${{ steps.version.outputs.tag }}"
+            --ref "$TAG" \
+            --field ref="$TAG"
