@@ -59,14 +59,14 @@ Re-provisioning is only needed if your HA IP changes or a device is factory-rese
 
 Instead of re-provisioning devices, add a static route in your router that redirects all Ambientika cloud traffic to your HA host:
 
-- **Destination:** `185.214.203.87/32`
+- **Destination:** `195.39.253.2/32` (current IP for `app.ambientika.eu` — the cloud has moved before, so re-check this if the redirect stops working)
 - **Gateway:** your HA IP (e.g. `192.168.1.10`)
 
 Then add a persistent IP alias on the HA host so it accepts packets addressed to the cloud IP. Add to `configuration.yaml`:
 
 ```yaml
 shell_command:
-  add_ip_alias: 'ip addr add 185.214.203.87/32 dev end0 || true'
+  add_ip_alias: 'ip addr add 195.39.253.2/32 dev end0 || true'
 
 automation:
   - alias: "Add IP alias on startup"
@@ -79,6 +79,8 @@ automation:
 ```
 
 > **Note:** This method redirects the cloud IP for all devices on your network. BLE provisioning is preferred when possible as it is more targeted and does not require router access.
+>
+> **If you use DNS-based redirection** (pointing `app.ambientika.eu` at your HA IP on your gateway) instead of a static route, and you also enable `cloud_sync_enabled`, set `cloud_host` to the real cloud IP (`195.39.253.2`) rather than the hostname. Otherwise the add-on would resolve `app.ambientika.eu` through your own redirected DNS and try to relay cloud traffic back to itself.
 
 ---
 
@@ -152,6 +154,8 @@ For cloud API and provisioning architecture see [`CLOUD-INTEGRATION.md`](CLOUD-I
 | 18 | Last operating mode |
 | 19 | Light sensitivity |
 | 20 | Signal strength |
+
+> **Legacy 19-byte variant:** devices on older radio/micro firmware (observed on `0.0.11`) send a truncated 19-byte status packet — identical to the layout above through byte 18, but without the `lightSensitivity`/`signalStrength` fields. The add-on handles both lengths; on the 19-byte variant, `lightSensitivity` defaults to `NOT_AVAILABLE` and `signalStrength` to `0`. (#36)
 
 ---
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppEvents } from '../../models/enum/app-events.enum';
 
 // Capture server and socket event handlers
@@ -23,12 +23,16 @@ const mockServer = {
     listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => { if (cb) cb(); }),
 };
 
-vi.mock('node:net', () => ({
-    createServer: vi.fn(() => mockServer),
-    Server: vi.fn(),
-    Socket: vi.fn(),
-    default: { createServer: vi.fn(() => mockServer), Server: vi.fn(), Socket: vi.fn() },
-}));
+vi.mock('node:net', () => {
+    const isIP = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? 4 : 0;
+    return {
+        createServer: vi.fn(() => mockServer),
+        Server: vi.fn(),
+        Socket: vi.fn(),
+        isIP,
+        default: { createServer: vi.fn(() => mockServer), Server: vi.fn(), Socket: vi.fn(), isIP },
+    };
+});
 
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 
@@ -62,6 +66,18 @@ function make18ByteBuffer(sn = 'aabbccddeeff'): Buffer {
     return buf;
 }
 
+// Build a valid 19-byte legacy status buffer (firmware 0.0.11, #36)
+function make19ByteBuffer(sn = 'aabbccddeeff'): Buffer {
+    const buf = Buffer.alloc(19);
+    const octets = sn.match(/.{2}/g) || [];
+    for (let i = 0; i < 6; i++) {
+        buf[2 + i] = parseInt(octets[i] || '00', 16);
+    }
+    buf[8] = 1;  // OperatingMode.AUTO
+    buf[9] = 0;  // FanSpeed.LOW
+    return buf;
+}
+
 describe('LocalSocketService', () => {
     let service: LocalSocketService;
     let eventService: EventService;
@@ -85,6 +101,24 @@ describe('LocalSocketService', () => {
         eventService = new EventService(mockLog);
         new LocalSocketService(mockLog, eventService);
         expect(mockServer.listen).toHaveBeenCalledWith(12000, '0.0.0.0', expect.any(Function));
+        delete process.env.PORT;
+    });
+
+    it('listens on LOCAL_SOCKET_PORT env when set', async () => {
+        process.env.LOCAL_SOCKET_PORT = '13000';
+        eventService = new EventService(mockLog);
+        new LocalSocketService(mockLog, eventService);
+        expect(mockServer.listen).toHaveBeenCalledWith(13000, '0.0.0.0', expect.any(Function));
+        delete process.env.LOCAL_SOCKET_PORT;
+    });
+
+    it('prefers LOCAL_SOCKET_PORT over legacy PORT when both are set', async () => {
+        process.env.LOCAL_SOCKET_PORT = '13000';
+        process.env.PORT = '12000';
+        eventService = new EventService(mockLog);
+        new LocalSocketService(mockLog, eventService);
+        expect(mockServer.listen).toHaveBeenCalledWith(13000, '0.0.0.0', expect.any(Function));
+        delete process.env.LOCAL_SOCKET_PORT;
         delete process.env.PORT;
     });
 
@@ -167,6 +201,28 @@ describe('LocalSocketService', () => {
 
         it('21-byte data: does NOT log an unrecognized-length warning', () => {
             socketHandlers['data']?.(make21ByteBuffer());
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
+
+        it('19-byte data: emits deviceStatusUpdate event (legacy firmware 0.0.11, #36)', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, listener);
+
+            socketHandlers['data']?.(make19ByteBuffer());
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('19-byte data: maps serial number to connection key', () => {
+            socketHandlers['data']?.(make19ByteBuffer('aabbccddeeff'));
+
+            const deviceConnections = (service as any).deviceConnections;
+            expect(deviceConnections.has('aabbccddeeff')).toBe(true);
+        });
+
+        it('19-byte data: does NOT log an unrecognized-length warning', () => {
+            socketHandlers['data']?.(make19ByteBuffer());
 
             expect(mockLog.warn).not.toHaveBeenCalled();
         });
@@ -256,11 +312,19 @@ describe('LocalSocketService', () => {
             vi.clearAllMocks();
             Object.keys(cloudSocketHandlers).forEach(k => delete cloudSocketHandlers[k]);
             process.env.REMOTE_CLOUD_HOST = '185.214.203.87';
+            // Cloud host is resolved once at construction, so recreate the service
+            // after setting the env var rather than relying on the outer instance.
+            eventService = new EventService(mockLog);
+            service = new LocalSocketService(mockLog, eventService);
             // Connect a real device first so deviceConnections is populated
             serverHandlers['connection']?.(mockSocket);
             socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
             // Now simulate cloud connecting back
             serverHandlers['connection']?.(cloudSocket);
+        });
+
+        afterEach(() => {
+            delete process.env.REMOTE_CLOUD_HOST;
         });
 
         it('does NOT emit LOCAL_SOCKET_CONNECTED for cloud connection', () => {

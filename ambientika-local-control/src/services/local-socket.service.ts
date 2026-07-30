@@ -5,6 +5,7 @@ import * as net from 'node:net';
 import {DeviceMapper} from './device.mapper';
 import {EventService} from './event.service';
 import {AppEvents} from '../models/enum/app-events.enum';
+import {CloudHostResolver} from './cloud-host-resolver';
 
 dotenv.config()
 
@@ -13,16 +14,18 @@ export class LocalSocketService {
     private clients: Map<string, Socket> = new Map(); // connectionKey -> Socket
     private deviceConnections: Map<string, string> = new Map(); // serialNumber -> connectionKey
     private deviceMapper: DeviceMapper;
+    private cloudHostResolver: CloudHostResolver;
 
     constructor(private log: Logger, private eventService: EventService) {
         this.log.debug('Construct LocalSocketService');
         this.deviceMapper = new DeviceMapper(this.log);
+        this.cloudHostResolver = new CloudHostResolver(process.env.REMOTE_CLOUD_HOST || 'app.ambientika.eu', this.log);
         this.initLocalSocketServerOnClientConnect();
         this.initEventListener();
     }
 
     private initLocalSocketServerOnClientConnect(): void {
-        const localSocketPort = parseInt(process.env.PORT || "11000");
+        const localSocketPort = parseInt(process.env.LOCAL_SOCKET_PORT || process.env.PORT || "11000");
         this.localServer = net.createServer(() => {
         });
         this.localServer.on('connection', (socket: Socket) => {
@@ -34,8 +37,7 @@ export class LocalSocketService {
     }
 
     private initConnectionListener(serverSocket: Socket): void {
-        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
-        const isCloudConnection = serverSocket.remoteAddress === cloudHost;
+        const isCloudConnection = !!serverSocket.remoteAddress && this.cloudHostResolver.matches(serverSocket.remoteAddress);
 
         if (serverSocket.remoteAddress && serverSocket.remotePort) {
             const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
@@ -132,7 +134,7 @@ export class LocalSocketService {
                 this.deviceConnections.set(deviceInfo.serialNumber, connectionKey);
                 this.log.debug(`Mapped device ${deviceInfo.serialNumber} to connection ${connectionKey}`);
             }
-            if (data.length === 21) {
+            if (data.length === 19 || data.length === 21) {
                 const remoteAddress = serverSocket.remoteAddress || '';
                 const connectionKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;
                 const device = this.deviceMapper.deviceFromSocketBuffer(data, remoteAddress);
@@ -144,12 +146,12 @@ export class LocalSocketService {
 
                 this.eventService.deviceStatusUpdate(device);
             }
-            if (data.length !== 18 && data.length !== 21) {
+            if (data.length !== 18 && data.length !== 19 && data.length !== 21) {
                 // Device data of an unrecognized length is silently unusable — it never reaches
                 // deviceStatusUpdate, so it's never saved to the DB or published to MQTT. Surface
                 // it at warn level (instead of only the silly-level dump above) so a device sending
                 // an unexpected packet format is visible without needing silly logging enabled.
-                this.log.warn(`Received ${data.length}-byte packet from ${serverSocket.remoteAddress}:${serverSocket.remotePort} with no known handler (expected 18 or 21 bytes): ${data.toString('hex')}`);
+                this.log.warn(`Received ${data.length}-byte packet from ${serverSocket.remoteAddress}:${serverSocket.remotePort} with no known handler (expected 18, 19 or 21 bytes): ${data.toString('hex')}`);
             }
         });
     }
