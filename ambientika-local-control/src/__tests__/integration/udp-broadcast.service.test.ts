@@ -257,6 +257,18 @@ describe('UDPBroadcastService', () => {
             expect(map.has('192.168.1.100')).toBe(false);
             expect(ipToAllSerials.has('192.168.1.100')).toBe(false);
         });
+
+        it('does not throw when the serial-set mapping for the IP is already gone', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+            const device = makeDevice('aabbccddeeff', '192.168.1.100:12345');
+            eventService.deviceStatusUpdate(device);
+
+            // Simulate the ipToAllSerials entry having already been cleared out-of-band,
+            // while the exact ipPortToSerial mapping is still present.
+            (service as any).ipToAllSerials.delete('192.168.1.100');
+
+            expect(() => eventService.localSocketDisconnected('192.168.1.100:12345')).not.toThrow();
+        });
     });
 
     describe('close()', () => {

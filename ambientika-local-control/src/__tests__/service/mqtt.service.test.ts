@@ -58,6 +58,34 @@ describe('MqttService', () => {
         service = new MqttService(mockLog, eventService, mockStorage);
     });
 
+    describe('constructor options', () => {
+        afterEach(() => {
+            delete process.env.MQTT_USERNAME;
+            delete process.env.MQTT_PASSWORD;
+            delete process.env.MQTT_CLIENT_ID;
+            delete process.env.ENABLE_RAW_COMMANDS;
+        });
+
+        it('passes username/password/clientId to mqtt.connect when both are set', async () => {
+            process.env.MQTT_USERNAME = 'user';
+            process.env.MQTT_PASSWORD = 'pass';
+            process.env.MQTT_CLIENT_ID = 'client-1';
+            new MqttService(mockLog, new EventService(mockLog), mockStorage);
+
+            const mqtt = await import('mqtt');
+            expect(mqtt.connect).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+                username: 'user', password: 'pass', clientId: 'client-1',
+            }));
+        });
+
+        it('logs that raw_command is enabled when ENABLE_RAW_COMMANDS=true', () => {
+            process.env.ENABLE_RAW_COMMANDS = 'true';
+            new MqttService(mockLog, new EventService(mockLog), mockStorage);
+
+            expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('raw_command topic is enabled'));
+        });
+    });
+
     describe('BUG 2 REGRESSION — MQTT subscription leak on device offline', () => {
         it('calls mqttClient.unsubscribe when device goes offline and subscription is tracked', () => {
             // Add device to subscriptions
@@ -137,6 +165,13 @@ describe('MqttService', () => {
             const topics: string[] = (service as any).getSubscriptionTopics('aabbccddeeff');
             expect(topics).toContain('ambientika/aabbccddeeff/raw');
         });
+
+        it('pushes an empty raw command topic when enabled but RAW_COMMAND_TOPIC is unset', () => {
+            delete process.env.RAW_COMMAND_TOPIC;
+            process.env.ENABLE_RAW_COMMANDS = 'true';
+            const topics: string[] = (service as any).getSubscriptionTopics('aabbccddeeff');
+            expect(topics).toContain('');
+        });
     });
 
     describe('getHumidityLevel', () => {
@@ -170,6 +205,12 @@ describe('MqttService', () => {
     describe('mqttClient events', () => {
         it('subscribes to HA status topic on MQTT connect', () => {
             process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
+            mqttEventHandlers['connect']?.();
+            expect(mockMqttClient.subscribe).toHaveBeenCalledWith('homeassistant/status', expect.any(Function));
+        });
+
+        it('subscribes to the default HA status topic when the env var is unset', () => {
+            delete process.env.HOME_ASSISTANT_STATUS_TOPIC;
             mqttEventHandlers['connect']?.();
             expect(mockMqttClient.subscribe).toHaveBeenCalledWith('homeassistant/status', expect.any(Function));
         });
@@ -250,6 +291,115 @@ describe('MqttService', () => {
 
             expect(sendDiscoverySpy).not.toHaveBeenCalled();
         });
+
+        it('publishes target humidity 40 for DRY humidityLevel', () => {
+            const device = makeDevice();
+            device.humidityLevel = 'DRY';
+            eventService.deviceStatusUpdate(device);
+
+            const calls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('target-humidity/state')
+            );
+            expect(calls.some(([, msg]: [string, string]) => msg === '40')).toBe(true);
+        });
+
+        it('publishes target humidity 75 for MOIST humidityLevel', () => {
+            const device = makeDevice();
+            device.humidityLevel = 'MOIST';
+            eventService.deviceStatusUpdate(device);
+
+            const calls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('target-humidity/state')
+            );
+            expect(calls.some(([, msg]: [string, string]) => msg === '75')).toBe(true);
+        });
+
+        it('does not publish fan speed when device.fanSpeed is falsy', () => {
+            const device = makeDevice();
+            device.fanSpeed = '';
+            eventService.deviceStatusUpdate(device);
+
+            const calls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('fan-mode/state')
+            );
+            expect(calls).toHaveLength(0);
+        });
+
+        it('publishes MEDIUM for fan_status when device fanSpeed is MEDIUM', () => {
+            const device = makeDevice();
+            device.fanSpeed = 'MEDIUM';
+            eventService.deviceStatusUpdate(device);
+
+            const calls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('fan-status')
+            );
+            expect(calls.some(([, msg]: [string, string]) => msg === 'MEDIUM')).toBe(true);
+        });
+
+        it('does not call loadZoneHouseIdFromDb when zone and houseId are already cached', () => {
+            const device = makeDevice('aabbccddeeff');
+            (service as any).deviceZones.set('aabbccddeeff', 3);
+            (service as any).deviceHouseIds.set('aabbccddeeff', 12048);
+            const loadSpy = vi.spyOn(service as any, 'loadZoneHouseIdFromDb');
+
+            eventService.deviceStatusUpdate(device);
+
+            expect(loadSpy).not.toHaveBeenCalled();
+        });
+
+        it('publishes the cached zone and houseId for the device', () => {
+            process.env.DEVICE_ZONE_TOPIC = 'ambientika/%serialNumber/zone';
+            process.env.HOUSE_ID_TOPIC = 'ambientika/%serialNumber/house_id';
+            const device = makeDevice('aabbccddeeff');
+            (service as any).deviceZones.set('aabbccddeeff', 3);
+            (service as any).deviceHouseIds.set('aabbccddeeff', 12048);
+
+            eventService.deviceStatusUpdate(device);
+
+            expect(mockMqttClient.publish).toHaveBeenCalledWith(
+                'ambientika/aabbccddeeff/zone', '3', expect.any(Function)
+            );
+            expect(mockMqttClient.publish).toHaveBeenCalledWith(
+                'ambientika/aabbccddeeff/house_id', '12048', expect.any(Function)
+            );
+        });
+    });
+
+    describe('loadZoneHouseIdFromDb', () => {
+        it('does nothing when no matching device row is found', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb(undefined)
+            );
+            const device = makeDevice('aabbccddeeff');
+
+            expect(() => (service as any).loadZoneHouseIdFromDb(device)).not.toThrow();
+        });
+
+        it('restores zone and houseId from the DB row and publishes both', () => {
+            process.env.DEVICE_ZONE_TOPIC = 'ambientika/%serialNumber/zone';
+            process.env.HOUSE_ID_TOPIC = 'ambientika/%serialNumber/house_id';
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb({ zone: 5, houseId: 99 })
+            );
+            const device = makeDevice('aabbccddeeff');
+
+            (service as any).loadZoneHouseIdFromDb(device);
+
+            expect((service as any).deviceZones.get('aabbccddeeff')).toBe(5);
+            expect((service as any).deviceHouseIds.get('aabbccddeeff')).toBe(99);
+            expect(mockLog.debug).toHaveBeenCalledWith(expect.stringContaining('Restored zone/houseId from DB'));
+        });
+
+        it('does not republish or log when the DB row has null zone and houseId', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb({ zone: null, houseId: null })
+            );
+            const device = makeDevice('aabbccddeeff');
+
+            (service as any).loadZoneHouseIdFromDb(device);
+
+            expect(mockLog.debug).not.toHaveBeenCalledWith(expect.stringContaining('Restored zone/houseId from DB'));
+        });
     });
 
     describe('handleMessages routing', () => {
@@ -325,6 +475,85 @@ describe('MqttService', () => {
             expect(listener).toHaveBeenCalledWith('aabbccddeeff');
         });
 
+        it('routes device setup topic to deviceSetupUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
+            const setup = { deviceRole: 'MASTER', zoneIndex: 0, houseId: 1 };
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup',
+                Buffer.from(JSON.stringify(setup))
+            );
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('logs error for invalid JSON on the device setup topic', () => {
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup',
+                Buffer.from('not-json')
+            );
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to parse device setup message')
+            );
+        });
+
+        it('routes target humidity command topic to deviceOperatingModeUpdate with humidityLevel', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/target-humidity/set',
+                Buffer.from('40')
+            );
+
+            expect(listener).toHaveBeenCalledWith(
+                expect.objectContaining({ humidityLevel: expect.any(String) }),
+                'aabbccddeeff'
+            );
+        });
+
+        it('routes mode command topic "fan_only" to OperatingMode.LAST', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/mode/set',
+                Buffer.from('fan_only')
+            );
+
+            expect(listener).toHaveBeenCalledWith(
+                expect.objectContaining({ operatingMode: '12' }), // OperatingMode.LAST.toString()
+                'aabbccddeeff'
+            );
+        });
+
+        it('routes mode command topic with a regular mode value uppercased', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/mode/set',
+                Buffer.from('auto')
+            );
+
+            expect(listener).toHaveBeenCalledWith(
+                expect.objectContaining({ operatingMode: 'AUTO' }),
+                'aabbccddeeff'
+            );
+        });
+
+        it('routes light sensitivity command topic to deviceOperatingModeUpdate', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, listener);
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/light-sensitivity/set',
+                Buffer.from('medium')
+            );
+
+            expect(listener).toHaveBeenCalledWith(
+                expect.objectContaining({ lightSensitivity: 'MEDIUM' }),
+                'aabbccddeeff'
+            );
+        });
+
         it('routes device setup JSON topic to deviceSetupUpdate', () => {
             const listener = vi.fn();
             eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
@@ -344,6 +573,18 @@ describe('MqttService', () => {
             );
 
             expect(mockLog.error).toHaveBeenCalled();
+        });
+
+        it('logs error for JSON setup with an invalid device role', () => {
+            const invalidRoleSetup = { role: 'NOT_A_ROLE', zone: 0, houseId: 1 };
+            mqttEventHandlers['message']?.(
+                'ambientika/aabbccddeeff/setup-json',
+                Buffer.from(JSON.stringify(invalidRoleSetup))
+            );
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining("Invalid device role 'NOT_A_ROLE'")
+            );
         });
 
         it('logs error for JSON setup with missing required fields', () => {
@@ -466,6 +707,55 @@ describe('MqttService', () => {
             process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
             mqttEventHandlers['message']?.('homeassistant/status', Buffer.from('offline'));
             expect(mockStorage.getDevices).not.toHaveBeenCalled();
+        });
+
+        it('re-sends discovery messages for already-subscribed devices when HA comes online', async () => {
+            process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
+            process.env.HOME_ASSISTANT_AUTO_DISCOVERY = 'true';
+            process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_TOPIC = 'homeassistant/climate/%serialNumber/config';
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+            const dto = {
+                id: 1, serialNumber: 'aabbccddeeff', status: 'ONLINE',
+                lastUpdate: new Date().toISOString(), firstSeen: new Date().toISOString(),
+                operatingMode: 'AUTO', fanSpeed: 'LOW', humidityLevel: 'NORMAL',
+                temperature: 22, humidity: 55, airQuality: 'GOOD', humidityAlarm: false,
+                filterStatus: 'GOOD', nightAlarm: false, deviceRole: 'MASTER',
+                remoteAddress: '192.168.1.1', lastOperatingMode: 'SMART', lightSensitivity: 'LOW',
+            };
+            mockStorage.getDevices.mockImplementation((cb: (d: any[]) => void) => cb([dto]));
+            const discoverySpy = vi.spyOn(service as any, 'sendDeviceDiscoveryMessages');
+
+            mqttEventHandlers['message']?.('homeassistant/status', Buffer.from('online'));
+            await new Promise<void>(resolve => setImmediate(resolve));
+
+            expect(discoverySpy).toHaveBeenCalled();
+            delete process.env.HOME_ASSISTANT_AUTO_DISCOVERY;
+        });
+
+        it('does not send discovery messages for devices that are not subscribed', async () => {
+            process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
+            const dto = {
+                id: 1, serialNumber: '112233445566', status: 'ONLINE',
+                lastUpdate: new Date().toISOString(), firstSeen: new Date().toISOString(),
+                operatingMode: 'AUTO', fanSpeed: 'LOW', humidityLevel: 'NORMAL',
+                temperature: 22, humidity: 55, airQuality: 'GOOD', humidityAlarm: false,
+                filterStatus: 'GOOD', nightAlarm: false, deviceRole: 'MASTER',
+                remoteAddress: '192.168.1.1', lastOperatingMode: 'SMART', lightSensitivity: 'LOW',
+            };
+            mockStorage.getDevices.mockImplementation((cb: (d: any[]) => void) => cb([dto]));
+            const discoverySpy = vi.spyOn(service as any, 'sendDeviceDiscoveryMessages');
+
+            mqttEventHandlers['message']?.('homeassistant/status', Buffer.from('online'));
+            await new Promise<void>(resolve => setImmediate(resolve));
+
+            expect(discoverySpy).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when getDevices yields undefined', async () => {
+            process.env.HOME_ASSISTANT_STATUS_TOPIC = 'homeassistant/status';
+            mockStorage.getDevices.mockImplementation((cb: (d: any) => void) => cb(undefined));
+
+            expect(() => mqttEventHandlers['message']?.('homeassistant/status', Buffer.from('online'))).not.toThrow();
         });
     });
 
@@ -691,6 +981,21 @@ describe('MqttService', () => {
             );
             expect(() => eventService.deviceBroadcastStatus(broadcast)).not.toThrow();
         });
+
+        it('does not publish fan_status/fan_mode when the broadcast has no serialNumber', () => {
+            process.env.FAN_STATUS_TOPIC = 'ambientika/%serialNumber/fan-status';
+            process.env.FAN_MODE_TOPIC = 'ambientika/%serialNumber/fan-mode';
+            const broadcast = new DeviceBroadcastStatus(
+                undefined, [], 0, 'ALTERNATING', 'HIGH'
+            );
+
+            eventService.deviceBroadcastStatus(broadcast);
+
+            const calls = mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('fan-status') || topic.includes('fan-mode')
+            );
+            expect(calls).toHaveLength(0);
+        });
     });
 
     describe('UDP broadcast houseId caching', () => {
@@ -825,6 +1130,61 @@ describe('MqttService', () => {
                 expect.stringContaining('Invalid hex characters')
             );
         });
+
+        it('logs "device not found" when no matching device exists for the raw command', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb(undefined)
+            );
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            mqttEventHandlers['message']?.('ambientika/aabbccddeeff/raw', Buffer.from('0011'));
+
+            expect(listener).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('not found for raw command'));
+        });
+
+        it('handles a raw command buffer shorter than 8 bytes without crashing the buffer analysis', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb({
+                    id: 1, serialNumber: 'aabbccddeeff', status: 'ONLINE',
+                    lastUpdate: new Date().toISOString(), firstSeen: new Date().toISOString(),
+                    operatingMode: 'AUTO', fanSpeed: 'LOW', humidityLevel: 'NORMAL',
+                    temperature: 22, humidity: 55, airQuality: 'GOOD', humidityAlarm: false,
+                    filterStatus: 'GOOD', nightAlarm: false, deviceRole: 'MASTER',
+                    remoteAddress: '192.168.1.1', lastOperatingMode: 'SMART', lightSensitivity: 'LOW',
+                })
+            );
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            // A single-byte raw command — shorter than every buffer.length check in
+            // logBufferAnalysis (>=8, >=2, >=9), exercising their false branches.
+            expect(() => mqttEventHandlers['message']?.('ambientika/aabbccddeeff/raw', Buffer.from('00'))).not.toThrow();
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('logs an error when the storage lookup throws inside handleRawCommand', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementationOnce(() => {
+                throw new Error('storage boom');
+            });
+
+            expect(() => mqttEventHandlers['message']?.('ambientika/aabbccddeeff/raw', Buffer.from('0011'))).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Failed to process raw command'));
+        });
+
+        it('returns null and logs an error when Buffer.from throws while converting a hex string', () => {
+            const bufferFromSpy = vi.spyOn(Buffer, 'from').mockImplementationOnce(() => {
+                throw new Error('buffer boom');
+            });
+            try {
+                const result = (service as any).hexStringToBuffer('0011');
+                expect(result).toBeNull();
+                expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Error converting hex string to buffer'));
+            } finally {
+                bufferFromSpy.mockRestore();
+            }
+        });
     });
 
     describe('sendDeviceMode', () => {
@@ -903,6 +1263,51 @@ describe('MqttService', () => {
                 (mockMqttClient as any).connected = true;
             }
         });
+
+        it('logs an error when the publish callback reports an error', () => {
+            mockMqttClient.publish.mockImplementationOnce(
+                (_topic: string, _msg: string, cb: (err?: Error) => void) => cb(new Error('publish failed'))
+            );
+
+            (service as any).publish('some/topic', 'some-message');
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('mqtt publish error'), expect.any(Error)
+            );
+        });
+    });
+
+    describe('unsubscribeFromTopic', () => {
+        it('logs an error when the unsubscribe callback reports an error', () => {
+            mockMqttClient.unsubscribe.mockImplementationOnce(
+                (_topic: string, cb: (err: Error | null) => void) => cb(new Error('unsubscribe failed'))
+            );
+
+            (service as any).unsubscribeFromTopic('some/topic');
+
+            expect(mockLog.error).toHaveBeenCalledWith(
+                expect.stringContaining('mqtt unsubscribe error'), expect.any(Error)
+            );
+        });
+
+        it('logs debug when unsubscribe succeeds', () => {
+            (service as any).unsubscribeFromTopic('some/topic');
+
+            expect(mockLog.debug).toHaveBeenCalledWith(expect.stringContaining('mqtt unsubscribe from'));
+        });
+    });
+
+    describe('unsubscribeDeviceSubscriptions when not connected', () => {
+        it('does not unsubscribe when mqtt client is not connected', () => {
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+            (mockMqttClient as any).connected = false;
+            try {
+                (service as any).unsubscribeDeviceSubscriptions('aabbccddeeff');
+                expect((service as any).deviceTopicSubscriptions.has('aabbccddeeff')).toBe(true);
+            } finally {
+                (mockMqttClient as any).connected = true;
+            }
+        });
     });
 
     describe('batchSubscribeToTopics error fallback', () => {
@@ -950,6 +1355,19 @@ describe('MqttService', () => {
                 ([topic]: [string]) => topic.includes('cloud-availability')
             );
             expect(cloudCalls).toHaveLength(0);
+        });
+
+        it('publishes cloud availability when the device is found by remoteAddress', () => {
+            process.env.CLOUD_AVAILABILITY_TOPIC = 'ambientika/%serialNumber/cloud-availability';
+            mockStorage.findExistingDeviceByRemoteAddress.mockImplementation(
+                (_addr: string, cb: (d: any) => void) => cb({ serialNumber: 'aabbccddeeff' })
+            );
+
+            (service as any).sendDeviceCloudAvailability('192.168.1.1', 'true');
+
+            expect(mockMqttClient.publish).toHaveBeenCalledWith(
+                'ambientika/aabbccddeeff/cloud-availability', 'true', expect.any(Function)
+            );
         });
     });
 
@@ -1005,6 +1423,16 @@ describe('MqttService', () => {
 
             expect(mockMqttClient.end).not.toHaveBeenCalled();
             (mockMqttClient as any).connected = true;
+        });
+
+        it('skips publishing offline availability when AVAILABILITY_TOPIC is unset', async () => {
+            delete process.env.AVAILABILITY_TOPIC;
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+
+            await service.close();
+
+            expect(mockMqttClient.publish).not.toHaveBeenCalled();
+            expect(mockMqttClient.end).toHaveBeenCalled();
         });
     });
 });
