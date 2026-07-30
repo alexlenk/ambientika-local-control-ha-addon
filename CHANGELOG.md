@@ -2,13 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-### Version 1.1.21 - Fix local_socket_port option, stale cloud host IP
+### Version 1.1.21 - Fix local_socket_port, stale cloud host IP, and legacy 19-byte status packet
 
 #### Fixed
 - **Local socket**: the `local_socket_port` add-on option was silently ignored — `run.sh` exports it as `LOCAL_SOCKET_PORT`, but `local-socket.service.ts` only ever read the legacy `PORT` env var, so the service always listened on 11000 regardless of the configured value. It now reads `LOCAL_SOCKET_PORT` first, falling back to `PORT` for non-add-on/dev usage. (#38)
 - **Cloud sync**: the default `cloud_host` (`185.214.203.87`) was stale — `app.ambientika.eu` now resolves to `195.39.253.2`, so any user with `cloud_sync_enabled: true` relying on the default was silently relaying to a dead address. The default is now the hostname `app.ambientika.eu` so DNS tracks future moves instead of a hardcoded IP. (#37)
 - **Cloud-connection detection**: `local-socket.service.ts` and `remote-socket.service.ts` compared the raw `cloud_host` value against an incoming socket's IP address, which only worked when `cloud_host` was itself an IP literal. Now handled by a small `CloudHostResolver` that resolves a hostname via DNS once at startup and compares against the resolved IP, falling back to a direct string comparison for IP literals — no behavior change for users who set `cloud_host` to an IP.
-- **Docs**: updated the router static-route method in the README to the current cloud IP, and added a note that DNS-redirect users should set `cloud_host` to the real IP rather than the hostname, to avoid the add-on resolving its own redirected DNS back to itself.
+- **Local socket / device mapper**: devices on older radio/micro firmware (observed on `0.0.11`) send a 19-byte status packet instead of 21 bytes — identical layout through byte 18, but missing the `lightSensitivity`/`signalStrength` fields. These packets were previously dropped entirely (only a `warn` log, never reaching the DB or MQTT), so affected devices connected successfully but never produced any entities. The add-on now accepts both 19- and 21-byte status packets, defaulting `lightSensitivity` to `NOT_AVAILABLE` and `signalStrength` to `0` for the legacy variant. (#36)
+- **Docs**: updated the router static-route method in the README to the current cloud IP, added a note that DNS-redirect users should set `cloud_host` to the real IP rather than the hostname (to avoid the add-on resolving its own redirected DNS back to itself), and documented the legacy 19-byte status packet variant.
 
 ---
 

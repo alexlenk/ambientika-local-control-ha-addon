@@ -101,6 +101,39 @@ describe('DeviceMapper', () => {
             expect(device.deviceRole).toBe('MASTER');
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown device role'));
         });
+
+        it('parses a 19-byte legacy status buffer (firmware 0.0.11, #36)', () => {
+            // Real payload captured from firmware 0.0.11 (radio/micro), serial synthesized:
+            // 01 00 | aa bb cc dd ee ff | 03 01 01 1b 35 00 00 00 01 00 03
+            const buf = Buffer.from('0100aabbccddeeff0301011b35000000010003', 'hex');
+            expect(buf.length).toBe(19);
+
+            const device = mapper.deviceFromSocketBuffer(buf, '192.168.1.55');
+
+            expect(device.serialNumber).toBe('aabbccddeeff');
+            expect(device.operatingMode).toBe('NIGHT');
+            expect(device.fanSpeed).toBe('MEDIUM');
+            expect(device.humidityLevel).toBe('NORMAL');
+            expect(device.temperature).toBe(27);
+            expect(device.humidity).toBe(53);
+            expect(device.airQuality).toBe('VERY_GOOD');
+            expect(device.humidityAlarm).toBe(false);
+            expect(device.filterStatus).toBe('GOOD');
+            expect(device.nightAlarm).toBe(true);
+            expect(device.deviceRole).toBe('MASTER');
+            expect(device.lastOperatingMode).toBe('NIGHT');
+            expect(device.lightSensitivity).toBe('NOT_AVAILABLE');
+            expect(device.signalStrength).toBe(0);
+            expect(device.remoteAddress).toBe('192.168.1.55');
+        });
+
+        it('does not log missing-field warnings for a 19-byte legacy status buffer', () => {
+            const buf = Buffer.from('0100aabbccddeeff0301011b35000000010003', 'hex');
+
+            mapper.deviceFromSocketBuffer(buf, '192.168.1.55');
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
     });
 
     describe('deviceInformationFromSocketBuffer', () => {
