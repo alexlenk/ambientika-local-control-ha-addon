@@ -31,8 +31,8 @@ const start = async function () {
                     const host = HOST_CHAR_PREFIX + CLOUD_HOST;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(host));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);
@@ -41,8 +41,8 @@ const start = async function () {
                     const wifi = SSID_CHAR_PREFIX + SSID;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(wifi));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);
@@ -51,8 +51,8 @@ const start = async function () {
                     const wifiPw = PWD_CHAR_PREFIX + PWD;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(wifiPw));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);

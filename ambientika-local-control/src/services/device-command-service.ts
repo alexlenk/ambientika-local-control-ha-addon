@@ -188,15 +188,15 @@ export class DeviceCommandService {
         this.log.info(`Hex: ${buffer.toString('hex')}`);
         
         // Parse buffer structure
-        this.log.info(`Byte 0: ${buffer[0].toString(16)} (should be 0x02)`);
-        this.log.info(`Byte 1: ${buffer[1].toString(16)} (should be 0x00)`);
-        
+        this.log.info(`Byte 0: ${(buffer[0] as number).toString(16)} (should be 0x02)`);
+        this.log.info(`Byte 1: ${(buffer[1] as number).toString(16)} (should be 0x00)`);
+
         // Serial number (bytes 2-7)
         const serialHex = buffer.slice(2, 8).toString('hex');
         this.log.info(`Serial (bytes 2-7): ${serialHex} (should be ${device.serialNumber})`);
-        
+
         // Command byte (should be 0x01)
-        this.log.info(`Command byte 8: ${buffer[8].toString(16)} (should be 0x01)`);
+        this.log.info(`Command byte 8: ${(buffer[8] as number).toString(16)} (should be 0x01)`);
         
         // Operating mode
         const operatingModeByte = buffer[9];
@@ -208,7 +208,7 @@ export class DeviceCommandService {
         
         // Remaining bytes
         for (let i = 11; i < buffer.length; i++) {
-            this.log.info(`Byte ${i}: ${buffer[i].toString(16)}`);
+            this.log.info(`Byte ${i}: ${(buffer[i] as number).toString(16)}`);
         }
         
         // Check for potential issues

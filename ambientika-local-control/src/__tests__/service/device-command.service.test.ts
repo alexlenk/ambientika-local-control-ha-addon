@@ -34,14 +34,13 @@ const mockStorage = {
 } as any;
 
 describe('DeviceCommandService', () => {
-    let service: DeviceCommandService;
     let eventService: EventService;
 
     beforeEach(() => {
         vi.useFakeTimers();
         vi.clearAllMocks();
         eventService = new EventService(mockLog);
-        service = new DeviceCommandService(mockLog, mockStorage, eventService);
+        new DeviceCommandService(mockLog, mockStorage, eventService);
     });
 
     afterEach(() => {

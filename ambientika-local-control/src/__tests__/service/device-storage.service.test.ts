@@ -214,7 +214,6 @@ describe('DeviceStorageService', () => {
 
     describe('createDbConnection', () => {
         it('returns existing db when file exists (no table creation)', async () => {
-            const sqlite3Mock = await import('sqlite3');
             // fs mock returns true (file exists), so it just calls new Database(filepath)
             // The existing beforeEach already exercises this path via the mock that returns true
             const db = (service as any).db;

@@ -56,7 +56,7 @@ export class RemoteSocketService {
             this.log.warn(`Remote socket error for ${localAddress}: ${error.message}`);
             
             // Only clean up for fatal errors, not transient ones
-            const errorCode = (error as any).code;
+            const errorCode = (error as NodeJS.ErrnoException).code;
             if (errorCode === 'ECONNRESET' || errorCode === 'EPIPE' || errorCode === 'ENOTCONN' || errorCode === 'ECONNREFUSED') {
                 this.eventService.remoteSocketDisconnected(localAddress);
                 this.clients.delete(localAddress);

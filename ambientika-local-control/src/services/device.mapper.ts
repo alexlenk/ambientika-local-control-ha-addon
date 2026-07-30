@@ -18,7 +18,7 @@ import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
 import {Logger} from 'winston';
 
 export class DeviceMapper {
-    private buffer: Buffer;
+    private buffer!: Buffer;
 
     constructor(private log: Logger) {
     }
@@ -26,46 +26,71 @@ export class DeviceMapper {
     deviceFromSocketBuffer(data: Buffer, remoteAddress: string): Device {
         this.buffer = data;
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
-        const operatingMode = OperatingMode[this.getIntFromBufferSlice(8, 9)];
+        const operatingModeValue = this.getIntFromBufferSlice(8, 9);
+        const operatingMode = OperatingMode[operatingModeValue];
+        if (operatingMode === undefined) {
+            this.log.warn(`Unknown operatingMode value ${operatingModeValue} from device ${serialNumber}, using SMART fallback`);
+        }
+        const finalOperatingMode = operatingMode ?? OperatingMode[OperatingMode.SMART];
         const fanSpeedValue = this.getIntFromBufferSlice(9, 10);
         const fanSpeed = FanSpeed[fanSpeedValue];
         if (fanSpeed === undefined) {
             this.log.warn(`Invalid fanSpeed value ${fanSpeedValue} from device ${serialNumber}, using MEDIUM fallback`);
         }
-        const finalFanSpeed = fanSpeed || FanSpeed[FanSpeed.MEDIUM];
-        const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(10, 11)];
+        const finalFanSpeed = fanSpeed ?? FanSpeed[FanSpeed.MEDIUM];
+        const humidityLevelValue = this.getIntFromBufferSlice(10, 11);
+        const humidityLevel = HumidityLevel[humidityLevelValue];
+        if (humidityLevel === undefined) {
+            this.log.warn(`Unknown humidityLevel value ${humidityLevelValue} from device ${serialNumber}, using DRY fallback`);
+        }
+        const finalHumidityLevel = humidityLevel ?? HumidityLevel[HumidityLevel.DRY];
         const temperature = this.getIntFromBufferSlice(11, 12);
         const humidity = this.getIntFromBufferSlice(12, 13);
-        const airQuality = AirQuality[this.getIntFromBufferSlice(13, 14)];
+        const airQualityValue = this.getIntFromBufferSlice(13, 14);
+        const airQuality = AirQuality[airQualityValue];
+        if (airQuality === undefined) {
+            this.log.warn(`Unknown airQuality value ${airQualityValue} from device ${serialNumber}, using VERY_GOOD fallback`);
+        }
+        const finalAirQuality = airQuality ?? AirQuality[AirQuality.VERY_GOOD];
         const humidityAlarm = this.getBooleanFromBufferSlice(14, 15);
-        const filterStatus = FilterStatus[this.getIntFromBufferSlice(15, 16)];
+        const filterStatusValue = this.getIntFromBufferSlice(15, 16);
+        const filterStatus = FilterStatus[filterStatusValue];
+        if (filterStatus === undefined) {
+            this.log.warn(`Unknown filterStatus value ${filterStatusValue} from device ${serialNumber}, using GOOD fallback`);
+        }
+        const finalFilterStatus = filterStatus ?? FilterStatus[FilterStatus.GOOD];
         const nightAlarm = this.getBooleanFromBufferSlice(16, 17);
         const deviceRoleValue = this.getIntFromBufferSlice(17, 18);
         const deviceRole = DeviceRole[deviceRoleValue];
         if (deviceRole === undefined) {
             this.log.warn(`Unknown device role value ${deviceRoleValue} for device ${serialNumber}, using MASTER fallback`);
         }
-        const finalDeviceRole = deviceRole || DeviceRole[DeviceRole.MASTER];
-        const lastOperatingMode = OperatingMode[this.getIntFromBufferSlice(18, 19)];
+        const finalDeviceRole = deviceRole ?? DeviceRole[DeviceRole.MASTER];
+        const lastOperatingModeValue = this.getIntFromBufferSlice(18, 19);
+        const lastOperatingModeRaw = OperatingMode[lastOperatingModeValue];
+        if (lastOperatingModeRaw === undefined) {
+            this.log.warn(`Unknown lastOperatingMode value ${lastOperatingModeValue} from device ${serialNumber}, using SMART fallback`);
+        }
+        const lastOperatingMode = lastOperatingModeRaw ?? OperatingMode[OperatingMode.SMART];
         // Firmware 0.0.11 sends a 19-byte status packet with no lightSensitivity/signalStrength
         // fields (see #36). Default them explicitly instead of falling through to the generic
         // short-buffer fallback, which would log a warning on every periodic status packet.
         const lightSensitivity = data.length >= 20
-            ? LightSensitivity[this.getIntFromBufferSlice(19, 20)]
+            ? (LightSensitivity[this.getIntFromBufferSlice(19, 20)] ?? LightSensitivity[LightSensitivity.NOT_AVAILABLE])
             : LightSensitivity[LightSensitivity.NOT_AVAILABLE];
         const signalStrength = data.length >= 21
             ? this.getIntFromBufferSlice(20, 21)
             : 0;
         return new Device(
             serialNumber,
-            operatingMode,
+            finalOperatingMode,
             finalFanSpeed,
-            humidityLevel,
+            finalHumidityLevel,
             temperature,
             humidity,
-            airQuality,
+            finalAirQuality,
             humidityAlarm,
-            filterStatus,
+            finalFilterStatus,
             nightAlarm,
             finalDeviceRole,
             lastOperatingMode,
@@ -119,10 +144,10 @@ export class DeviceMapper {
     deviceDeviceCommandFromSocketBuffer(data: Buffer): DeviceCommand {
         this.buffer = data;
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
-        const operatingMode = OperatingMode[this.getIntFromBufferSlice(9, 10)];
-        const fanSpeed = FanSpeed[this.getIntFromBufferSlice(10, 11)];
-        const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(11, 12)];
-        const lightSensorLevel = LightSensitivity[this.getIntFromBufferSlice(12, 13)];
+        const operatingMode = OperatingMode[this.getIntFromBufferSlice(9, 10)] ?? OperatingMode[OperatingMode.SMART];
+        const fanSpeed = FanSpeed[this.getIntFromBufferSlice(10, 11)] ?? FanSpeed[FanSpeed.MEDIUM];
+        const humidityLevel = HumidityLevel[this.getIntFromBufferSlice(11, 12)] ?? HumidityLevel[HumidityLevel.DRY];
+        const lightSensorLevel = LightSensitivity[this.getIntFromBufferSlice(12, 13)] ?? LightSensitivity[LightSensitivity.NOT_AVAILABLE];
         return new DeviceCommand(serialNumber, operatingMode, fanSpeed, humidityLevel, lightSensorLevel);
     }
 
@@ -131,7 +156,7 @@ export class DeviceMapper {
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
         const temperature = this.getSignedInt16FromBufferSlice(9, 11);
         const humidity = this.getIntFromBufferSlice(11, 12);
-        const airQuality = AirQuality[this.getIntFromBufferSlice(12, 13) - 1];
+        const airQuality = AirQuality[this.getIntFromBufferSlice(12, 13) - 1] ?? AirQuality[AirQuality.VERY_GOOD];
         return new DeviceWeatherUpdate(serialNumber, temperature, humidity, airQuality);
     }
 

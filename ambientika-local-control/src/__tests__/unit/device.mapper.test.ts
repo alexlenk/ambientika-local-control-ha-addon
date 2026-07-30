@@ -102,6 +102,65 @@ describe('DeviceMapper', () => {
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown device role'));
         });
 
+        it('falls back to SMART operatingMode for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 8); // unknown operatingMode
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.operatingMode).toBe('SMART');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown operatingMode'));
+        });
+
+        it('falls back to DRY humidityLevel for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 10); // unknown humidityLevel
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.humidityLevel).toBe('DRY');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown humidityLevel'));
+        });
+
+        it('falls back to VERY_GOOD airQuality for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 13); // unknown airQuality
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.airQuality).toBe('VERY_GOOD');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown airQuality'));
+        });
+
+        it('falls back to GOOD filterStatus for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 15); // unknown filterStatus
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.filterStatus).toBe('GOOD');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown filterStatus'));
+        });
+
+        it('falls back to SMART lastOperatingMode for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 18); // unknown lastOperatingMode
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.lastOperatingMode).toBe('SMART');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown lastOperatingMode'));
+        });
+
+        it('falls back to NOT_AVAILABLE lightSensitivity for unknown value on a 21-byte buffer', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 19); // unknown lightSensitivity, but buffer is full 21 bytes
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.lightSensitivity).toBe('NOT_AVAILABLE');
+        });
+
         it('parses a 19-byte legacy status buffer (firmware 0.0.11, #36)', () => {
             // Real payload captured from firmware 0.0.11 (radio/micro), serial synthesized:
             // 01 00 | aa bb cc dd ee ff | 03 01 01 1b 35 00 00 00 01 00 03

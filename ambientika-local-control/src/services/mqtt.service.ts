@@ -31,7 +31,7 @@ export class MqttService {
     private mqttPassword = process.env.MQTT_PASSWORD;
     private mqttClientId = process.env.MQTT_CLIENT_ID;
 
-    private mqttClient: MqttClient;
+    private mqttClient!: MqttClient;
 
     private readonly deviceMapper: DeviceMapper;
     private readonly hAAutoDiscoveryService: HAAutoDiscoveryService;
@@ -698,22 +698,25 @@ export class MqttService {
         
         // Byte-by-byte analysis
         for (let i = 0; i < buffer.length; i++) {
-            const byte = buffer[i];
+            const byte = buffer[i] as number;
             this.log.info(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
         }
-        
+
         // Common pattern analysis
         if (buffer.length >= 8) {
             const possibleSerial = buffer.slice(2, 8).toString('hex');
             this.log.info(`Possible serial number (bytes 2-7): ${possibleSerial}`);
         }
-        
+
         if (buffer.length >= 2) {
-            this.log.info(`Header (bytes 0-1): 0x${buffer[0].toString(16).padStart(2, '0')} 0x${buffer[1].toString(16).padStart(2, '0')}`);
+            const byte0 = buffer[0] as number;
+            const byte1 = buffer[1] as number;
+            this.log.info(`Header (bytes 0-1): 0x${byte0.toString(16).padStart(2, '0')} 0x${byte1.toString(16).padStart(2, '0')}`);
         }
-        
+
         if (buffer.length >= 9) {
-            this.log.info(`Command byte (byte 8): 0x${buffer[8].toString(16).padStart(2, '0')} (${buffer[8]})`);
+            const byte8 = buffer[8] as number;
+            this.log.info(`Command byte (byte 8): 0x${byte8.toString(16).padStart(2, '0')} (${byte8})`);
         }
     }
 
@@ -741,12 +744,11 @@ export class MqttService {
 
     private extractSerialNumberFromTopic(topic: string): string | undefined {
         const matches = topic.match(/(?<serial>[a-f0-9]{12})/);
-        if (matches !== null && matches.groups) {
-            const serialNumber = matches.groups.serial;
-            if (this.deviceTopicSubscriptions.has(serialNumber)) {
-                return serialNumber;
-            }
+        const serialNumber = matches?.groups?.serial;
+        if (serialNumber && this.deviceTopicSubscriptions.has(serialNumber)) {
+            return serialNumber;
         }
+        return undefined;
     }
 
     private getOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
@@ -756,7 +758,7 @@ export class MqttService {
             case process.env.TARGET_HUMIDITY_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
-            case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
+            case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber): {
                 // Only accept valid fan speeds: LOW, MEDIUM, HIGH, NIGHT
                 const fanSpeedUpper = messageString.toUpperCase();
                 if (fanSpeedUpper === 'LOW' || fanSpeedUpper === 'MEDIUM' || fanSpeedUpper === 'HIGH' || fanSpeedUpper === 'NIGHT') {
@@ -766,6 +768,7 @@ export class MqttService {
                     return undefined;
                 }
                 return dto;
+            }
             case process.env.MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.operatingMode = messageString === 'fan_only' ? OperatingMode.LAST.toString() :
                     messageString.toUpperCase();
@@ -777,6 +780,7 @@ export class MqttService {
                 dto.lightSensitivity = messageString.toUpperCase();
                 return dto;
         }
+        return undefined;
     }
 
     private getHumidityLevel(humidityLevel: string): string {

@@ -10,7 +10,7 @@ import {CloudHostResolver} from './cloud-host-resolver';
 dotenv.config()
 
 export class LocalSocketService {
-    private localServer: Server;
+    private localServer!: Server;
     private clients: Map<string, Socket> = new Map(); // connectionKey -> Socket
     private deviceConnections: Map<string, string> = new Map(); // serialNumber -> connectionKey
     private deviceMapper: DeviceMapper;
@@ -73,7 +73,7 @@ export class LocalSocketService {
             this.log.warn(`Socket error for connection ${connectionKey}: ${error.message}`);
             
             // Only clean up for fatal errors, not transient ones
-            const errorCode = (error as any).code;
+            const errorCode = (error as NodeJS.ErrnoException).code;
             if (errorCode === 'ECONNRESET' || errorCode === 'EPIPE' || errorCode === 'ENOTCONN') {
                 if (serverSocket.remoteAddress && serverSocket.remotePort) {
                     const connKey = `${serverSocket.remoteAddress}:${serverSocket.remotePort}`;

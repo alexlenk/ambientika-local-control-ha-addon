@@ -25,7 +25,12 @@ export class RestService {
             this.log.debug(`Rest service listening on port: ${port.toString()}`);
         });
         app.get("/device/status/:serialNumber", (request: Request, response: Response) => {
-            this.deviceStorageService.findExistingDeviceBySerialNumber(request.params.serialNumber,
+            const serialNumber = request.params.serialNumber;
+            if (!serialNumber) {
+                response.status(400).send('Missing serialNumber');
+                return;
+            }
+            this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
                 (existingDevice: DeviceDto | undefined) => {
                     if (existingDevice) {
                         response.status(200).send(existingDevice);
@@ -36,13 +41,23 @@ export class RestService {
         });
 
         app.post("/device/operating-mode/:serialNumber", (request: Request, response: Response) => {
-            this.eventService.deviceOperatingModeUpdate(request.body as OperatingModeDto, request.params.serialNumber);
+            const serialNumber = request.params.serialNumber;
+            if (!serialNumber) {
+                response.status(400).send('Missing serialNumber');
+                return;
+            }
+            this.eventService.deviceOperatingModeUpdate(request.body as OperatingModeDto, serialNumber);
             response.send();
 
         });
 
         app.post("/device/reset-filter/:serialNumber", (request: Request, response: Response) => {
-            this.eventService.deviceFilterReset(request.params.serialNumber);
+            const serialNumber = request.params.serialNumber;
+            if (!serialNumber) {
+                response.status(400).send('Missing serialNumber');
+                return;
+            }
+            this.eventService.deviceFilterReset(serialNumber);
             response.send();
         });
 
@@ -54,6 +69,10 @@ export class RestService {
         // Debug: inject 16-byte setup packet into cloud socket for a device
         // POST /cloud/send-setup/8813bf16089c  body: {"role":0,"zone":1,"houseId":12048}
         app.post("/cloud/send-setup/:serialNumber", (request: Request, response: Response) => {
+            if (!request.params.serialNumber) {
+                response.status(400).send('Missing serialNumber');
+                return;
+            }
             const serialNumber = request.params.serialNumber.toLowerCase();
             const { role = 0, zone = 0, houseId = 0 } = request.body;
             this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber, (device) => {

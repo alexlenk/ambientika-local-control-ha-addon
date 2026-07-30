@@ -20,6 +20,9 @@
     "url": "https://github.com/alexlenk/ambientika-local-control-ha-addon"
   },
   "license": "ISC",
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@js-joda/core": "^5.6.3",
     "dotenv": "^16.4.5",
