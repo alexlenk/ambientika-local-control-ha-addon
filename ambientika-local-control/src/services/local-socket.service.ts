@@ -22,7 +22,7 @@ export class LocalSocketService {
     }
 
     private initLocalSocketServerOnClientConnect(): void {
-        const localSocketPort = parseInt(process.env.PORT || "11000");
+        const localSocketPort = parseInt(process.env.LOCAL_SOCKET_PORT || process.env.PORT || "11000");
         this.localServer = net.createServer(() => {
         });
         this.localServer.on('connection', (socket: Socket) => {

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.1.21 - Fix local_socket_port option being silently ignored
+
+#### Fixed
+- **Local socket**: the `local_socket_port` add-on option was silently ignored — `run.sh` exports it as `LOCAL_SOCKET_PORT`, but `local-socket.service.ts` only ever read the legacy `PORT` env var, so the service always listened on 11000 regardless of the configured value. It now reads `LOCAL_SOCKET_PORT` first, falling back to `PORT` for non-add-on/dev usage. (#38)
+
+---
+
 ### Version 1.1.20 - Drop unnecessary NET_ADMIN privilege
 
 #### Changed
