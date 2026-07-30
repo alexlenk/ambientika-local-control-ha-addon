@@ -301,5 +301,17 @@ describe('RemoteSocketService', () => {
                 expect(mockRemoteSocket.write).not.toHaveBeenCalled();
             });
         });
+
+        describe('close()', () => {
+            it('destroys all cloud sockets and clears the client map', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.99', mockRemoteSocket);
+
+                svc.close();
+
+                expect(mockRemoteSocket.destroy).toHaveBeenCalled();
+                expect((svc as any).clients.size).toBe(0);
+            });
+        });
     });
 });

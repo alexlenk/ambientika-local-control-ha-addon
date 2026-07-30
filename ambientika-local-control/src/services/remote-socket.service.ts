@@ -134,4 +134,12 @@ export class RemoteSocketService {
             this.log.warn(`Cloud socket for ${localAddress} not found.`);
         }
     }
+
+    close(): void {
+        this.log.debug('Closing RemoteSocketService');
+        for (const socket of this.clients.values()) {
+            socket.destroy();
+        }
+        this.clients.clear();
+    }
 }

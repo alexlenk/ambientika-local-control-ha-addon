@@ -294,6 +294,18 @@ export class DeviceStorageService {
         } as DeviceQueryParams;
     }
 
+    close(): Promise<void> {
+        this.log.debug('Closing DeviceStorageService');
+        return new Promise((resolve) => {
+            this.db.close((error) => {
+                if (error) {
+                    this.log.error('Error closing db', error);
+                }
+                resolve();
+            });
+        });
+    }
+
 }
 
 export interface DeviceQueryParams {

@@ -21,6 +21,7 @@ const mockServer = {
         serverHandlers[event] = handler;
     }),
     listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => { if (cb) cb(); }),
+    close: vi.fn(),
 };
 
 vi.mock('node:net', () => {
@@ -436,6 +437,18 @@ describe('LocalSocketService', () => {
 
             // Fallback path writes via remoteAddress
             expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
+    });
+
+    describe('close()', () => {
+        it('closes the TCP server and destroys all client sockets', () => {
+            serverHandlers['connection']?.(mockSocket);
+
+            service.close();
+
+            expect(mockServer.close).toHaveBeenCalled();
+            expect(mockSocket.destroy).toHaveBeenCalled();
+            expect((service as any).clients.size).toBe(0);
         });
     });
 });

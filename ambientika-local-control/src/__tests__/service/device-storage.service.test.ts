@@ -16,17 +16,18 @@ vi.mock('sqlite3', () => {
         cb(null, []);
     });
     const mockExec = vi.fn();
+    const mockClose = vi.fn((cb?: (err: Error | null) => void) => { if (cb) cb(null); });
 
     return {
         default: {
             Database: vi.fn().mockImplementation((_path: string, cb?: (err: Error | null) => void) => {
                 if (cb) cb(null);
-                return { run: mockRun, get: mockGet, all: mockAll, exec: mockExec };
+                return { run: mockRun, get: mockGet, all: mockAll, exec: mockExec, close: mockClose };
             })
         },
         Database: vi.fn().mockImplementation((_path: string, cb?: (err: Error | null) => void) => {
             if (cb) cb(null);
-            return { run: mockRun, get: mockGet, all: mockAll, exec: mockExec };
+            return { run: mockRun, get: mockGet, all: mockAll, exec: mockExec, close: mockClose };
         })
     };
 });
@@ -228,6 +229,25 @@ describe('DeviceStorageService', () => {
             // findExistingDeviceBySerialNumber returns undefined → calls createDevice → db.run called
             const db = (service as any).db;
             expect(db.get).toHaveBeenCalled();
+        });
+    });
+
+    describe('close()', () => {
+        it('closes the underlying db connection', async () => {
+            const db = (service as any).db;
+
+            await service.close();
+
+            expect(db.close).toHaveBeenCalledWith(expect.any(Function));
+        });
+
+        it('logs an error if closing the db fails', async () => {
+            const db = (service as any).db;
+            db.close.mockImplementationOnce((cb: (err: Error | null) => void) => cb(new Error('close failed')));
+
+            await service.close();
+
+            expect(mockLog.error).toHaveBeenCalledWith('Error closing db', expect.any(Error));
         });
     });
 });

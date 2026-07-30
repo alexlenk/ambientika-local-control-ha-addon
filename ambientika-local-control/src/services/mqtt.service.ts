@@ -794,4 +794,20 @@ export class MqttService {
         }
     }
 
+    close(): Promise<void> {
+        this.log.debug('Closing MqttService');
+        if (!this.mqttClient?.connected) {
+            return Promise.resolve();
+        }
+        for (const serialNumber of this.deviceTopicSubscriptions) {
+            const topic = this.getDevicePublishTopic(process.env.AVAILABILITY_TOPIC, serialNumber);
+            if (topic) {
+                this.mqttClient.publish(topic, 'offline', {retain: true});
+            }
+        }
+        return new Promise((resolve) => {
+            this.mqttClient.end(false, {}, () => resolve());
+        });
+    }
+
 }

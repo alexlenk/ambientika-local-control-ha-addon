@@ -15,13 +15,14 @@ export class SchedulerService {
     private cronExpression = process.env.SCHEDULER_CRON as Spec;
     private deviceStaleTimeout: number = parseInt(process.env.DEVICE_STALE_TIMEOUT || '60');
     private deviceMapper: DeviceMapper;
+    private job: schedule.Job;
 
     constructor(private log: Logger,
                 private deviceStorageService: DeviceStorageService,
                 private eventService: EventService) {
         this.log.debug(`Initializing SchedulerService with cron ${this.cronExpression}`);
         this.deviceMapper = new DeviceMapper(this.log);
-        schedule.scheduleJob(this.cronExpression, () => {
+        this.job = schedule.scheduleJob(this.cronExpression, () => {
             this.deviceStorageService.getDevices((devices: DeviceDto[]) => {
                 if (devices) {
                     devices.forEach((deviceDto: DeviceDto) => {
@@ -38,5 +39,10 @@ export class SchedulerService {
             });
         });
 
+    }
+
+    close(): void {
+        this.log.debug('Closing SchedulerService');
+        this.job.cancel();
     }
 }

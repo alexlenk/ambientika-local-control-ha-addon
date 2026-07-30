@@ -100,4 +100,12 @@ export class UDPBroadcastService {
             }
         });
     }
+
+    close(): void {
+        this.log.debug('Closing UDPBroadcastService');
+        for (const socket of this.listener.values()) {
+            socket.close();
+        }
+        this.listener.clear();
+    }
 }

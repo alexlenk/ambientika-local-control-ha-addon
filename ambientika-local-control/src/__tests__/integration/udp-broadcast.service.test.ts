@@ -236,4 +236,15 @@ describe('UDPBroadcastService', () => {
             expect(map.has('192.168.1.100')).toBe(false);
         });
     });
+
+    describe('close()', () => {
+        it('closes all zone listener sockets', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+
+            service.close();
+
+            expect(mockUdpSocket.close).toHaveBeenCalled();
+            expect((service as any).listener.size).toBe(0);
+        });
+    });
 });

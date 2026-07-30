@@ -197,4 +197,13 @@ export class LocalSocketService {
             this.log.error(`Local Socket for ${remoteAddress} not found - command not sent!`);
         }
     }
+
+    close(): void {
+        this.log.debug('Closing LocalSocketService');
+        this.localServer.close();
+        for (const socket of this.clients.values()) {
+            socket.destroy();
+        }
+        this.clients.clear();
+    }
 }

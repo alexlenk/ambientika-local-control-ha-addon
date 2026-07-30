@@ -56,6 +56,32 @@ describe('RestService', () => {
         new RestService(mockLog, mockStorage, eventService);
     });
 
+    describe('GET /health', () => {
+        it('returns 200 with status ok, uptime, and device count', () => {
+            mockStorage.getDevices.mockImplementation(
+                (cb: (devices: DeviceDto[]) => void) => cb([makeDto('aabbccddeeff'), makeDto('112233445566')])
+            );
+            const res = { status: vi.fn().mockReturnThis(), send: vi.fn() };
+            routeHandlers['GET:/health']({}, res);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.send).toHaveBeenCalledWith(expect.objectContaining({
+                status: 'ok',
+                deviceCount: 2,
+            }));
+        });
+
+        it('reports deviceCount 0 when storage returns no devices', () => {
+            mockStorage.getDevices.mockImplementation(
+                (cb: (devices: DeviceDto[]) => void) => cb([])
+            );
+            const res = { status: vi.fn().mockReturnThis(), send: vi.fn() };
+            routeHandlers['GET:/health']({}, res);
+
+            expect(res.send).toHaveBeenCalledWith(expect.objectContaining({ deviceCount: 0 }));
+        });
+    });
+
     describe('GET /device/status/:serialNumber', () => {
         it('returns 200 with device DTO when device is found', () => {
             const dto = makeDto();

@@ -11,7 +11,11 @@ const mockMqttClient = {
     }),
     subscribe: vi.fn((_topics: unknown, cb?: (err: Error | null) => void) => { if (cb) cb(null); }),
     unsubscribe: vi.fn((_topic: unknown, cb?: (err: Error | null) => void) => { if (cb) cb(null); }),
-    publish: vi.fn((_topic: string, _msg: string, cb?: (err?: Error) => void) => { if (cb) cb(); }),
+    publish: vi.fn((_topic: string, _msg: string, optsOrCb?: unknown, cb?: (err?: Error) => void) => {
+        if (typeof optsOrCb === 'function') optsOrCb();
+        else if (cb) cb();
+    }),
+    end: vi.fn((_force?: boolean, _opts?: unknown, cb?: () => void) => { if (cb) cb(); }),
     connected: true,
 };
 
@@ -815,6 +819,33 @@ describe('MqttService', () => {
             expect(mockStorage.findExistingDeviceByRemoteAddress).toHaveBeenCalledWith(
                 '192.168.1.1', expect.any(Function)
             );
+        });
+    });
+
+    describe('close()', () => {
+        it('publishes retained offline availability for every subscribed device, then ends the client', async () => {
+            process.env.AVAILABILITY_TOPIC = 'ambientika/%serialNumber/availability';
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+            (service as any).deviceTopicSubscriptions.add('112233445566');
+
+            await service.close();
+
+            expect(mockMqttClient.publish).toHaveBeenCalledWith(
+                expect.stringContaining('aabbccddeeff'), 'offline', {retain: true}
+            );
+            expect(mockMqttClient.publish).toHaveBeenCalledWith(
+                expect.stringContaining('112233445566'), 'offline', {retain: true}
+            );
+            expect(mockMqttClient.end).toHaveBeenCalled();
+        });
+
+        it('resolves without publishing or ending when the client is not connected', async () => {
+            (mockMqttClient as any).connected = false;
+
+            await service.close();
+
+            expect(mockMqttClient.end).not.toHaveBeenCalled();
+            (mockMqttClient as any).connected = true;
         });
     });
 });

@@ -2,6 +2,7 @@ import {Logger} from 'winston';
 import dotenv from 'dotenv'
 import {DeviceStorageService} from './device-storage.service';
 import express, {Response, Request} from 'express';
+import {Server} from 'node:http';
 import {EventService} from './event.service';
 import {OperatingModeDto} from '../dto/operating-mode.dto';
 import {DeviceDto} from '../dto/device.dto';
@@ -10,6 +11,8 @@ import {WeatherUpdateDto} from '../dto/weather-update.dto';
 dotenv.config()
 
 export class RestService {
+    private server!: Server;
+
     constructor(private log: Logger,
                 private deviceStorageService: DeviceStorageService,
                 private eventService: EventService) {
@@ -21,9 +24,20 @@ export class RestService {
         const port = process.env.REST_API_PORT || 3000;
         const app = express();
         app.use(express.json());
-        app.listen(port, () => {
+        this.server = app.listen(port, () => {
             this.log.debug(`Rest service listening on port: ${port.toString()}`);
         });
+
+        app.get("/health", (_request: Request, response: Response) => {
+            this.deviceStorageService.getDevices((devices: DeviceDto[]) => {
+                response.status(200).send({
+                    status: 'ok',
+                    uptimeSeconds: Math.floor(process.uptime()),
+                    deviceCount: devices?.length ?? 0,
+                });
+            });
+        });
+
         app.get("/device/status/:serialNumber", (request: Request, response: Response) => {
             const serialNumber = request.params.serialNumber;
             if (!serialNumber) {
@@ -94,6 +108,13 @@ export class RestService {
                 this.eventService.localSocketDataUpdateReceived(buf, device.remoteAddress);
                 response.status(200).send({ sent: buf.toString('hex'), via: device.remoteAddress });
             });
+        });
+    }
+
+    close(): Promise<void> {
+        this.log.debug('Closing RestService');
+        return new Promise((resolve) => {
+            this.server.close(() => resolve());
         });
     }
 }

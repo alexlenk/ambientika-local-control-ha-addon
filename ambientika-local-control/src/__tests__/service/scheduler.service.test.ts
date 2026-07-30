@@ -4,11 +4,12 @@ import { AppEvents } from '../../models/enum/app-events.enum';
 
 // Capture the cron job callback registered by SchedulerService
 let capturedJobCallback: (() => void) | null = null;
+const mockJob = { cancel: vi.fn() };
 
 vi.mock('node-schedule', () => ({
     scheduleJob: vi.fn((_expr: unknown, cb: () => void) => {
         capturedJobCallback = cb;
-        return { cancel: vi.fn() };
+        return mockJob;
     }),
 }));
 
@@ -37,6 +38,7 @@ function makeDto(overrides: Partial<DeviceDto> = {}): DeviceDto {
 describe('SchedulerService', () => {
     let eventService: EventService;
     let mockStorage: any;
+    let service: SchedulerService;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -44,7 +46,7 @@ describe('SchedulerService', () => {
         eventService = new EventService(mockLog);
         mockStorage = { getDevices: vi.fn() };
         // Instantiate — registers the scheduleJob callback
-        new SchedulerService(mockLog, mockStorage, eventService);
+        service = new SchedulerService(mockLog, mockStorage, eventService);
     });
 
     it('registers a cron job in the constructor', () => {
@@ -105,5 +107,13 @@ describe('SchedulerService', () => {
         eventService.on(AppEvents.DEVICE_OFFLINE, offlineListener);
         capturedJobCallback!();
         expect(offlineListener).not.toHaveBeenCalled();
+    });
+
+    describe('close()', () => {
+        it('cancels the scheduled job', () => {
+            service.close();
+
+            expect(mockJob.cancel).toHaveBeenCalled();
+        });
     });
 });

@@ -15,6 +15,10 @@ ports:
 ports_description:
   3000/tcp: REST API port
   11000/tcp: Device communication port
+# Assumes rest_api_port is left at its default (3000) — the watchdog's [PORT:3000]
+# token maps to the static `ports` entry above, not the configurable rest_api_port
+# option, so changing rest_api_port means the watchdog checks the wrong port.
+watchdog: "http://[HOST]:[PORT:3000]/health"
 options:
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
