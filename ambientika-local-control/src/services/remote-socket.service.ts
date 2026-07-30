@@ -5,6 +5,7 @@ import * as net from 'node:net';
 import {EventService} from './event.service';
 import {AppEvents} from '../models/enum/app-events.enum';
 import {DeviceMapper} from './device.mapper';
+import {CloudHostResolver} from './cloud-host-resolver';
 
 dotenv.config()
 
@@ -12,10 +13,12 @@ export class RemoteSocketService {
 
     private clients: Map<string, Socket> = new Map();
     private deviceMapper: DeviceMapper;
+    private cloudHostResolver: CloudHostResolver;
 
     constructor(private log: Logger, private eventService: EventService) {
         this.log.debug('Construct RemoteSocketService');
         this.deviceMapper = new DeviceMapper(this.log);
+        this.cloudHostResolver = new CloudHostResolver(process.env.REMOTE_CLOUD_HOST || 'app.ambientika.eu', this.log);
         if (process.env.CLOUD_SYNC_ENABLED === 'true') {
             this.log.debug('Cloud sync enabled');
             this.initEventListener();
@@ -24,7 +27,7 @@ export class RemoteSocketService {
 
     private initRemoteSocketServer(localAddress: string): void {
         const remoteSocketPort = parseInt(process.env.REMOTE_CLOUD_SOCKET_PORT || '11000');
-        const remoteSocketHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
+        const remoteSocketHost = process.env.REMOTE_CLOUD_HOST || 'app.ambientika.eu';
         const remoteSocket = new net.Socket();
         remoteSocket.connect(remoteSocketPort, remoteSocketHost);
         this.clients.set(localAddress, remoteSocket);
@@ -93,10 +96,8 @@ export class RemoteSocketService {
     }
 
     private initEventListener(): void {
-        const cloudHost = process.env.REMOTE_CLOUD_HOST || '185.214.203.87';
-
         this.eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, (data: Buffer, localAddress: string) => {
-            if (localAddress === cloudHost) {
+            if (this.cloudHostResolver.matches(localAddress)) {
                 return;
             }
             this.log.silly(`Update cloud data from ${localAddress}: %o`, data);
@@ -104,7 +105,7 @@ export class RemoteSocketService {
         });
 
         this.eventService.on(AppEvents.LOCAL_SOCKET_CONNECTED, (localAddress: string) => {
-            if (localAddress === cloudHost) {
+            if (this.cloudHostResolver.matches(localAddress)) {
                 this.log.debug(`Ignoring inbound connection from cloud host ${localAddress}`);
                 return;
             }
