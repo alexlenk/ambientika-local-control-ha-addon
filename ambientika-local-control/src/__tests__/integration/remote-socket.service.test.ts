@@ -107,6 +107,16 @@ describe('RemoteSocketService', () => {
             expect(mockRemoteSocket.connect).toHaveBeenCalledWith(11000, '185.214.203.87');
         });
 
+        it('defaults to port 11000 and app.ambientika.eu when the env vars are unset', () => {
+            delete process.env.REMOTE_CLOUD_SOCKET_PORT;
+            delete process.env.REMOTE_CLOUD_HOST;
+            const svc = new RemoteSocketService(mockLog, eventService);
+
+            (svc as any).initRemoteSocketServer('192.168.1.100');
+
+            expect(mockRemoteSocket.connect).toHaveBeenCalledWith(11000, 'app.ambientika.eu');
+        });
+
         it('does not open a cloud connection when the cloud host itself connects locally', async () => {
             eventService.localSocketConnected('185.214.203.87');
 
@@ -122,6 +132,13 @@ describe('RemoteSocketService', () => {
             expect(remoteSocketHandlers['close']).toBeDefined();
             expect(remoteSocketHandlers['error']).toBeDefined();
             expect(remoteSocketHandlers['data']).toBeDefined();
+        });
+
+        it('logs debug on "connecting" event', () => {
+            eventService.localSocketConnected('192.168.1.100');
+
+            expect(() => remoteSocketHandlers['connecting']?.()).not.toThrow();
+            expect(mockLog.debug).toHaveBeenCalledWith(expect.stringContaining('connecting'));
         });
 
         it('emits remoteSocketConnected on "connect" event', () => {
@@ -202,6 +219,12 @@ describe('RemoteSocketService', () => {
 
                 expect(mockLog.debug).toHaveBeenCalled();
             });
+
+            it('logs debug for an unrecognized 13-byte command type', () => {
+                remoteSocketHandlers['data']?.(make13ByteBuffer(99));
+
+                expect(mockLog.debug).toHaveBeenCalledWith('Unknown device command type');
+            });
         });
 
         describe('error handling', () => {
@@ -236,6 +259,20 @@ describe('RemoteSocketService', () => {
                 remoteSocketHandlers['error']?.(err);
 
                 expect(mockRemoteSocket.destroy).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('LOCAL_SOCKET_DISCONNECTED', () => {
+            it('destroys the cloud client and removes it from the map', () => {
+                eventService.localSocketConnected('192.168.1.100');
+
+                eventService.localSocketDisconnected('192.168.1.100');
+
+                expect(mockRemoteSocket.destroy).toHaveBeenCalled();
+            });
+
+            it('does nothing extra when there is no cloud client for that address', () => {
+                expect(() => eventService.localSocketDisconnected('10.0.0.1')).not.toThrow();
             });
         });
 
@@ -299,6 +336,60 @@ describe('RemoteSocketService', () => {
                 eventService.emit(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, data, '185.214.203.87');
 
                 expect(mockRemoteSocket.write).not.toHaveBeenCalled();
+            });
+
+            it('logs a warning when the TCP write callback reports an error', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.5', mockRemoteSocket);
+
+                (svc as any).write(Buffer.from('data'), '192.168.1.5');
+                const writeCallback = mockRemoteSocket.write.mock.calls[0][1];
+                writeCallback(new Error('write failed'));
+
+                expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('TCP write error'));
+            });
+
+            it('logs silly when the TCP write callback reports success', () => {
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.5', mockRemoteSocket);
+
+                (svc as any).write(Buffer.from('data'), '192.168.1.5');
+                const writeCallback = mockRemoteSocket.write.mock.calls[0][1];
+                writeCallback();
+
+                expect(mockLog.silly).toHaveBeenCalledWith(expect.stringContaining('flushed to kernel'));
+            });
+
+            it('warns about backpressure when the socket write buffer is full', () => {
+                mockRemoteSocket.write.mockReturnValueOnce(false);
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.5', mockRemoteSocket);
+
+                (svc as any).write(Buffer.from('data'), '192.168.1.5');
+
+                expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('backpressure'));
+            });
+
+            it('does not warn about backpressure when the write is flushed immediately', () => {
+                mockRemoteSocket.write.mockReturnValueOnce(true);
+                const svc = new RemoteSocketService(mockLog, eventService);
+                (svc as any).clients.set('192.168.1.5', mockRemoteSocket);
+
+                (svc as any).write(Buffer.from('data'), '192.168.1.5');
+
+                expect(mockLog.warn).not.toHaveBeenCalledWith(expect.stringContaining('backpressure'));
+            });
+
+            it('lazily schedules a reconnect when writing to a locally-connected address with no client', () => {
+                eventService.localSocketConnected('192.168.1.100');
+                // Simulate the client having disappeared without going through the 'close' handler
+                const svc2 = new RemoteSocketService(mockLog, eventService);
+                (svc2 as any).locallyConnectedAddresses.add('192.168.1.100');
+
+                (svc2 as any).write(Buffer.from('data'), '192.168.1.100');
+
+                expect((svc2 as any).reconnectTimers.has('192.168.1.100')).toBe(true);
+                svc2.close();
             });
         });
 
@@ -436,6 +527,38 @@ describe('RemoteSocketService', () => {
                 (svc as any).write(Buffer.from('d'), '10.0.0.1');
                 const warnCallsAfter = mockLog.warn.mock.calls.filter((c: any[]) => c[0].includes('not found'));
                 expect(warnCallsAfter.length).toBe(2);
+            });
+
+            it('skips reconnecting if a client already exists by the time the timer fires', () => {
+                eventService.localSocketConnected('192.168.1.100');
+                const connectCallsBefore = mockRemoteSocket.connect.mock.calls.length;
+
+                remoteSocketHandlers['error']?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+
+                // Simulate a client reappearing before the scheduled reconnect fires
+                eventService.localSocketConnected('192.168.1.100');
+                const connectCallsAfterManualReconnect = mockRemoteSocket.connect.mock.calls.length;
+
+                vi.advanceTimersByTime(5000);
+
+                // No additional connect() call should happen — the pending timer's guard
+                // (locallyConnectedAddresses.has && !clients.has) is false since a client exists.
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsAfterManualReconnect);
+                expect(connectCallsAfterManualReconnect).toBeGreaterThan(connectCallsBefore);
+            });
+
+            it('does not schedule a second reconnect timer while one is already pending', () => {
+                eventService.localSocketConnected('192.168.1.100');
+                const connectCallsBefore = mockRemoteSocket.connect.mock.calls.length;
+
+                const fail = () => remoteSocketHandlers['error']?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }));
+                fail();
+                // A second fatal error before the first reconnect fires must not schedule another timer
+                fail();
+
+                vi.advanceTimersByTime(5000);
+                // Exactly one reconnect attempt should have fired, not two
+                expect(mockRemoteSocket.connect.mock.calls.length).toBe(connectCallsBefore + 1);
             });
         });
     });
