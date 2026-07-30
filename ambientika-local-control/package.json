@@ -24,7 +24,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@js-joda/core": "^5.6.3",
+    "@js-joda/core": "^6.1.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "mqtt": "^5.10.1",
