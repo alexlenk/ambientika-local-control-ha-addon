@@ -26,23 +26,36 @@ interface DeviceSetupJsonDto {
 
 export class MqttService {
 
+    // UDP broadcasts (the authoritative source for fan_status/fan_mode) arrive roughly
+    // every ~30s from a master device; suppress the TCP-derived fallback for this long
+    // after the last one seen for a serial so it doesn't flip-flop between vocabularies.
+    private static readonly UDP_FRESHNESS_WINDOW_MS = 60000;
+    // Arbitrary raw protocol access is a control primitive — any MQTT publish access
+    // (including anonymous/weak broker ACLs common in home setups) becomes unrestricted
+    // device control unless enable_raw_commands is explicitly turned on. See #42.
+    private static readonly MAX_RAW_COMMAND_BYTES = 32;
+
     private mqttConnectionString = process.env.MQTT_CONNECTION_STRING || 'localhost';
     private mqttUsername = process.env.MQTT_USERNAME;
     private mqttPassword = process.env.MQTT_PASSWORD;
     private mqttClientId = process.env.MQTT_CLIENT_ID;
 
-    private mqttClient: MqttClient;
+    private mqttClient!: MqttClient;
 
     private readonly deviceMapper: DeviceMapper;
     private readonly hAAutoDiscoveryService: HAAutoDiscoveryService;
     private readonly deviceTopicSubscriptions: Set<string> = new Set<string>();
     private readonly deviceZones: Map<string, number> = new Map();
     private readonly deviceHouseIds: Map<string, number> = new Map();
+    private readonly lastUdpBroadcastAt: Map<string, number> = new Map();
 
     constructor(private log: Logger,
                 private eventService: EventService,
                 private deviceStorageService: DeviceStorageService) {
         this.log.debug(`Initializing MqttService`);
+        this.log.info(process.env.ENABLE_RAW_COMMANDS === 'true'
+            ? 'MQTT raw_command topic is enabled — any broker publish access can send arbitrary bytes to devices'
+            : 'MQTT raw_command topic is disabled (enable_raw_commands)');
         this.deviceMapper = new DeviceMapper(this.log);
         this.hAAutoDiscoveryService = new HAAutoDiscoveryService(this);
         this.connect();
@@ -261,22 +274,14 @@ export class MqttService {
     }
 
     private sendDeviceOperatingMode(device: Device) {
-        // Slave devices show their role instead of the operating mode — the role is stable and
-        // informative, whereas the operating mode reflects the master's real-time direction command.
-        if (this.isSlave(device)) {
-            this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
-                device.deviceRole);
-            return;
-        }
+        // Publish the actual operating mode for every device, master or slave — a device role
+        // is not an operating mode. Slaves already have their own dedicated device_role topic
+        // (sendDeviceRole), so preset_mode no longer doubles as a role indicator (see #45).
         // Check if we have a stored command that should override the device's reported mode
         const storedMode = this.deviceStorageService.getStoredOperatingMode(device.serialNumber);
         const modeToPublish = storedMode || device.operatingMode;
         this.publish(this.getDevicePublishTopic(process.env.PRESET_MODE_STATE_TOPIC, device.serialNumber),
             modeToPublish);
-    }
-
-    private isSlave(device: Device): boolean {
-        return device.deviceRole === 'SLAVE_OPPOSITE_MASTER' || device.deviceRole === 'SLAVE_EQUAL_MASTER';
     }
 
     private sendDeviceFanSpeed(device: Device) {
@@ -391,14 +396,20 @@ export class MqttService {
             device.deviceRole);
     }
 
+    private isUdpDataFresh(serialNumber: string): boolean {
+        const lastSeen = this.lastUdpBroadcastAt.get(serialNumber);
+        return lastSeen !== undefined && Date.now() - lastSeen < MqttService.UDP_FRESHNESS_WINDOW_MS;
+    }
+
     private sendFanStatusFromDevice(device: Device) {
-        // Slave devices show their role — their fan direction is dictated by the master.
-        if (this.isSlave(device)) {
-            this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, device.serialNumber),
-                device.deviceRole);
+        // UDP broadcasts are the authoritative source for fan_status (real FanStatus enum
+        // values); only fall back to this TCP-derived approximation when no broadcast has
+        // been seen recently for this serial, so the topic doesn't flip-flop between the
+        // two vocabularies (see #45). A device role is not a fan status, so — unlike the
+        // old behavior — slaves get the same derived value as any other device here.
+        if (this.isUdpDataFresh(device.serialNumber)) {
             return;
         }
-        // Derive fan status from device operating mode as fallback
         let fanStatus = 'OFF';
         if (device.operatingMode !== 'OFF') {
             fanStatus = device.fanSpeed === 'HIGH' ? 'HIGH' :
@@ -409,7 +420,10 @@ export class MqttService {
     }
 
     private sendFanModeFromDevice(device: Device) {
-        // Derive fan mode from device operating mode as fallback
+        // Same UDP-freshness suppression as sendFanStatusFromDevice — see #45.
+        if (this.isUdpDataFresh(device.serialNumber)) {
+            return;
+        }
         let fanMode = 'OFF';
         if (device.operatingMode !== 'OFF') {
             fanMode = device.operatingMode === 'AUTO' ? 'AUTO' : 'MANUAL';
@@ -420,6 +434,7 @@ export class MqttService {
 
     private sendFanStatus(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
+            this.lastUdpBroadcastAt.set(deviceBroadcastStatus.serialNumber, Date.now());
             this.publish(this.getDevicePublishTopic(process.env.FAN_STATUS_TOPIC, deviceBroadcastStatus.serialNumber),
                 (deviceBroadcastStatus.fanStatus ?? 'UNKNOWN').toString());
         }
@@ -427,6 +442,7 @@ export class MqttService {
 
     private sendFanMode(deviceBroadcastStatus: DeviceBroadcastStatus) {
         if (deviceBroadcastStatus.serialNumber) {
+            this.lastUdpBroadcastAt.set(deviceBroadcastStatus.serialNumber, Date.now());
             this.publish(this.getDevicePublishTopic(process.env.FAN_MODE_TOPIC, deviceBroadcastStatus.serialNumber),
                 (deviceBroadcastStatus.fanMode ?? 'UNKNOWN').toString());
         }
@@ -495,7 +511,9 @@ export class MqttService {
         topics.push((process.env.FILTER_RESET_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         topics.push((process.env.DEVICE_SETUP_JSON_TOPIC || '').replace('%serialNumber', serialNumber));
-        topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        if (process.env.ENABLE_RAW_COMMANDS === 'true') {
+            topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
+        }
         topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
@@ -634,14 +652,22 @@ export class MqttService {
     }
 
     private handleRawCommand(serialNumber: string, message: Buffer): void {
+        if (process.env.ENABLE_RAW_COMMANDS !== 'true') {
+            this.log.warn(`Raw command received for ${serialNumber} but raw commands are disabled (enable_raw_commands); ignoring`);
+            return;
+        }
         try {
             const hexString = message.toString().trim();
-            this.log.info(`Raw command received for ${serialNumber}: ${hexString}`);
-            
+            this.log.debug(`Raw command received for ${serialNumber}: ${hexString}`);
+
             // Convert hex string to buffer
             const commandBuffer = this.hexStringToBuffer(hexString);
             if (commandBuffer) {
-                this.log.info(`Sending raw command to ${serialNumber}: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
+                if (commandBuffer.length > MqttService.MAX_RAW_COMMAND_BYTES) {
+                    this.log.error(`Raw command for ${serialNumber} rejected: ${commandBuffer.length} bytes exceeds the ${MqttService.MAX_RAW_COMMAND_BYTES}-byte limit`);
+                    return;
+                }
+                this.log.debug(`Sending raw command to ${serialNumber}: ${commandBuffer.toString('hex')} (${commandBuffer.length} bytes)`);
                 this.sendRawCommandToDevice(serialNumber, commandBuffer);
             } else {
                 this.log.error(`Invalid hex string format for ${serialNumber}: ${hexString}`);
@@ -692,28 +718,31 @@ export class MqttService {
     }
 
     private logBufferAnalysis(buffer: Buffer, serialNumber: string): void {
-        this.log.info(`=== RAW COMMAND ANALYSIS for ${serialNumber} ===`);
-        this.log.info(`Buffer length: ${buffer.length} bytes`);
-        this.log.info(`Hex: ${buffer.toString('hex')}`);
-        
+        this.log.debug(`=== RAW COMMAND ANALYSIS for ${serialNumber} ===`);
+        this.log.debug(`Buffer length: ${buffer.length} bytes`);
+        this.log.debug(`Hex: ${buffer.toString('hex')}`);
+
         // Byte-by-byte analysis
         for (let i = 0; i < buffer.length; i++) {
-            const byte = buffer[i];
-            this.log.info(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
+            const byte = buffer[i] as number;
+            this.log.debug(`Byte ${i}: 0x${byte.toString(16).padStart(2, '0')} (${byte})`);
         }
-        
+
         // Common pattern analysis
         if (buffer.length >= 8) {
             const possibleSerial = buffer.slice(2, 8).toString('hex');
-            this.log.info(`Possible serial number (bytes 2-7): ${possibleSerial}`);
+            this.log.debug(`Possible serial number (bytes 2-7): ${possibleSerial}`);
         }
-        
+
         if (buffer.length >= 2) {
-            this.log.info(`Header (bytes 0-1): 0x${buffer[0].toString(16).padStart(2, '0')} 0x${buffer[1].toString(16).padStart(2, '0')}`);
+            const byte0 = buffer[0] as number;
+            const byte1 = buffer[1] as number;
+            this.log.debug(`Header (bytes 0-1): 0x${byte0.toString(16).padStart(2, '0')} 0x${byte1.toString(16).padStart(2, '0')}`);
         }
-        
+
         if (buffer.length >= 9) {
-            this.log.info(`Command byte (byte 8): 0x${buffer[8].toString(16).padStart(2, '0')} (${buffer[8]})`);
+            const byte8 = buffer[8] as number;
+            this.log.debug(`Command byte (byte 8): 0x${byte8.toString(16).padStart(2, '0')} (${byte8})`);
         }
     }
 
@@ -741,12 +770,11 @@ export class MqttService {
 
     private extractSerialNumberFromTopic(topic: string): string | undefined {
         const matches = topic.match(/(?<serial>[a-f0-9]{12})/);
-        if (matches !== null && matches.groups) {
-            const serialNumber = matches.groups.serial;
-            if (this.deviceTopicSubscriptions.has(serialNumber)) {
-                return serialNumber;
-            }
+        const serialNumber = matches?.groups?.serial;
+        if (serialNumber && this.deviceTopicSubscriptions.has(serialNumber)) {
+            return serialNumber;
         }
+        return undefined;
     }
 
     private getOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
@@ -756,7 +784,7 @@ export class MqttService {
             case process.env.TARGET_HUMIDITY_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
-            case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
+            case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber): {
                 // Only accept valid fan speeds: LOW, MEDIUM, HIGH, NIGHT
                 const fanSpeedUpper = messageString.toUpperCase();
                 if (fanSpeedUpper === 'LOW' || fanSpeedUpper === 'MEDIUM' || fanSpeedUpper === 'HIGH' || fanSpeedUpper === 'NIGHT') {
@@ -766,6 +794,7 @@ export class MqttService {
                     return undefined;
                 }
                 return dto;
+            }
             case process.env.MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
                 dto.operatingMode = messageString === 'fan_only' ? OperatingMode.LAST.toString() :
                     messageString.toUpperCase();
@@ -777,6 +806,7 @@ export class MqttService {
                 dto.lightSensitivity = messageString.toUpperCase();
                 return dto;
         }
+        return undefined;
     }
 
     private getHumidityLevel(humidityLevel: string): string {
@@ -788,6 +818,22 @@ export class MqttService {
         } else {
             return HumidityLevel.MOIST.toString()
         }
+    }
+
+    close(): Promise<void> {
+        this.log.debug('Closing MqttService');
+        if (!this.mqttClient?.connected) {
+            return Promise.resolve();
+        }
+        for (const serialNumber of this.deviceTopicSubscriptions) {
+            const topic = this.getDevicePublishTopic(process.env.AVAILABILITY_TOPIC, serialNumber);
+            if (topic) {
+                this.mqttClient.publish(topic, 'offline', {retain: true});
+            }
+        }
+        return new Promise((resolve) => {
+            this.mqttClient.end(false, {}, () => resolve());
+        });
     }
 
 }

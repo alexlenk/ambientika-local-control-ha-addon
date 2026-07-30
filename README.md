@@ -159,6 +159,44 @@ For cloud API and provisioning architecture see [`CLOUD-INTEGRATION.md`](CLOUD-I
 
 ---
 
+## Logging
+
+Device serial numbers are effectively credentials in this ecosystem — the vendor protocol
+is unauthenticated, and the add-on's REST/MQTT paths address devices purely by serial. To
+avoid leaking them when logs are shared (e.g. pasted into a GitHub issue), serials are
+**masked in all log output by default**, keeping the last 4 hex characters so multiple
+devices stay distinguishable (e.g. `xxxxxxxx50e0`). This covers plain log lines and serials
+embedded inside raw packet hex dumps.
+
+Set `log_full_serials: true` to see full serials in the logs (useful when debugging locally).
+
+> **Note:** this only affects log output. MQTT topic names and REST API paths still address
+> devices by their real serial number — masking log lines doesn't change how the add-on is
+> addressed over the network.
+
+---
+
+## REST API
+
+The REST API (`rest_api_port`, default 3000) is unauthenticated by default and, because the
+add-on runs with `host_network: true`, reachable from anywhere on your LAN — the vendor
+device protocol itself has no authentication, and this add-on can only lock down the parts
+it controls.
+
+- `rest_api_bind` (default `0.0.0.0`) — set to `127.0.0.1` to restrict the API to the HA host
+  itself if you don't need LAN access to it.
+- `rest_api_token` — when set, every endpoint except `GET /health` requires an
+  `Authorization: Bearer <token>` header. `/health` is always left open since the Supervisor
+  watchdog polls it directly with no credentials.
+- `enable_debug_endpoints` (default `false`) — gates `POST /cloud/send-setup/:serialNumber`,
+  a debug endpoint that lets a caller directly reconfigure a device's role/zone/house ID.
+- `:serialNumber` path params are validated (12 hex characters) before reaching any handler,
+  and request bodies for `/device/operating-mode` and `/device/weather-update` are validated
+  against the known enum values / sane ranges rather than passed straight into buffer
+  construction.
+
+---
+
 ## MQTT Topics
 
 ### Device setup command
@@ -172,6 +210,13 @@ ambientika/{serialNumber}/setup/set
 ambientika/{serialNumber}/raw_command/set
 02001234567890ab00020200102f0000
 ```
+
+Disabled by default — set `enable_raw_commands: true` to turn it on. Any hex payload
+published here is written straight to the device's TCP socket with no validation beyond
+hex-format and a 32-byte length limit, bypassing all the modeled/validated command paths.
+On a broker with weak or anonymous ACLs (common in home setups), MQTT publish access
+becomes unrestricted device control — only enable this if you trust everyone with publish
+access to your broker, and prefer requiring broker authentication regardless.
 
 ---
 

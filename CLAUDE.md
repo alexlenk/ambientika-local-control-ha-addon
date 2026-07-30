@@ -38,10 +38,10 @@ npx vitest run src/__tests__/service/mqtt.service.test.ts
 npx vitest run -t "fan speed"
 ```
 
-Local arm64 image test (only needed when touching Dockerfile, package.json, or native deps):
+Local arm64 image test (only needed when touching Dockerfile or package.json):
 ```bash
 finch build --platform linux/arm64 -t ambientika-test ./ambientika-local-control/
-finch run --rm ambientika-test node -e "require('sqlite3'); console.log('ok')"
+finch run --rm ambientika-test node -e "const {DatabaseSync} = require('node:sqlite'); new DatabaseSync(':memory:'); console.log('ok')"
 ```
 
 ## Architecture
@@ -137,10 +137,12 @@ Note: `ambientika-local-control/CHANGELOG.md` is a second, separate changelog fi
 
 ## Test infrastructure
 
-**Framework:** Vitest + `@vitest/coverage-v8`. Current coverage: ~93%.
+**Framework:** Vitest 4 + `@vitest/coverage-v8`. Current coverage: ~94%.
 
 Key mocking patterns used across the test suite:
-- `vi.mock('sqlite3')` — prevents native compilation
+- `device-storage.service.test.ts` uses **real** `node:sqlite` `DatabaseSync` instances
+  (`DEVICE_DB=':memory:'`) rather than mocking — it's a Node built-in with no native
+  compilation step, so there's nothing to avoid; this also exercises real SQL.
 - `vi.mock('node:net')` / `vi.mock('node:dgram')` — socket services
 - `vi.mock('mqtt')` with captured `mqttEventHandlers` map — MQTT client events
 - `vi.useFakeTimers()` — 5-second command timeout in `device-command.service.test.ts`
@@ -150,6 +152,7 @@ Coverage excludes: `src/dto/**`, `src/scripts/**`, `src/**/*.interface.ts`, `src
 
 ## CI/CD
 
-- **Test job** on `ubuntu-latest` (x86, no QEMU, mocked sqlite3) gates all Docker builds via `needs: test`
+- **Test job** on `ubuntu-latest` (x86, no QEMU) gates all Docker builds via `needs: test`
 - **arm64 Docker build** uses native `ubuntu-24.04-arm` runner — no QEMU
-- **Dockerfile** compiles sqlite3 once in `build` stage, prunes devDeps with `npm prune --omit=dev`, copies `node_modules` directly into the production stage — sqlite3 is never compiled twice
+- **Dockerfile** has no native build toolchain — device storage uses `node:sqlite` (built
+  into Node), not the `sqlite3` npm package, so there's nothing to compile

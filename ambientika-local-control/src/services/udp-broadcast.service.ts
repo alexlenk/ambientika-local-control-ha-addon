@@ -66,7 +66,8 @@ export class UDPBroadcastService {
     private initEventListener(): void {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             // Store by IP address only (without port) to match UDP broadcast source addresses
-            const deviceIp = device.remoteAddress.split(':')[0];
+            // (split() always returns at least one element, so [0] is never undefined here)
+            const deviceIp = device.remoteAddress.split(':')[0]!;
             this.localAddressesSerialNumbers.set(deviceIp, device.serialNumber);
             // Track all serials per IP for zone propagation to slaves
             if (!this.ipToAllSerials.has(deviceIp)) {
@@ -77,7 +78,7 @@ export class UDPBroadcastService {
             this.ipPortToSerial.set(device.remoteAddress, device.serialNumber);
         });
         this.eventService.on(AppEvents.LOCAL_SOCKET_DISCONNECTED, (localAddress: string) => {
-            const ip = localAddress.split(':')[0];
+            const ip = localAddress.split(':')[0]!;
             const serial = this.ipPortToSerial.get(localAddress);
             if (serial) {
                 this.ipPortToSerial.delete(localAddress);
@@ -98,5 +99,13 @@ export class UDPBroadcastService {
                 this.ipToAllSerials.delete(ip);
             }
         });
+    }
+
+    close(): void {
+        this.log.debug('Closing UDPBroadcastService');
+        for (const socket of this.listener.values()) {
+            socket.close();
+        }
+        this.listener.clear();
     }
 }

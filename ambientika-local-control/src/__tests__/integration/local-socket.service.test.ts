@@ -16,11 +16,24 @@ const mockSocket = {
     destroyed: false,
 };
 
+const addresslessSocketHandlers: Record<string, (...args: any[]) => void> = {};
+const addresslessSocket = {
+    remoteAddress: undefined as string | undefined,
+    remotePort: undefined as number | undefined,
+    on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        addresslessSocketHandlers[event] = handler;
+    }),
+    write: vi.fn(),
+    destroy: vi.fn(),
+    destroyed: false,
+};
+
 const mockServer = {
     on: vi.fn((event: string, handler: (...args: any[]) => void) => {
         serverHandlers[event] = handler;
     }),
     listen: vi.fn((_port: unknown, _host: unknown, cb?: () => void) => { if (cb) cb(); }),
+    close: vi.fn(),
 };
 
 vi.mock('node:net', () => {
@@ -86,7 +99,9 @@ describe('LocalSocketService', () => {
         vi.clearAllMocks();
         Object.keys(serverHandlers).forEach(k => delete serverHandlers[k]);
         Object.keys(socketHandlers).forEach(k => delete socketHandlers[k]);
+        Object.keys(addresslessSocketHandlers).forEach(k => delete addresslessSocketHandlers[k]);
         mockSocket.destroyed = false;
+        addresslessSocket.destroyed = false;
         eventService = new EventService(mockLog);
         service = new LocalSocketService(mockLog, eventService);
     });
@@ -138,6 +153,15 @@ describe('LocalSocketService', () => {
             expect(socketHandlers['data']).toBeDefined();
             expect(socketHandlers['close']).toBeDefined();
             expect(socketHandlers['error']).toBeDefined();
+        });
+
+        it('does not register a client or emit localSocketConnected when the socket has no remoteAddress/remotePort', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_CONNECTED, listener);
+
+            expect(() => serverHandlers['connection']?.(addresslessSocket)).not.toThrow();
+
+            expect(listener).not.toHaveBeenCalled();
         });
     });
 
@@ -226,6 +250,16 @@ describe('LocalSocketService', () => {
 
             expect(mockLog.warn).not.toHaveBeenCalled();
         });
+
+        it('does not emit localSocketDataUpdateReceived when the socket has no remoteAddress', () => {
+            serverHandlers['connection']?.(addresslessSocket);
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE_RECEIVED, listener);
+
+            expect(() => addresslessSocketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'))).not.toThrow();
+
+            expect(listener).not.toHaveBeenCalled();
+        });
     });
 
     describe('close handling', () => {
@@ -250,6 +284,22 @@ describe('LocalSocketService', () => {
             socketHandlers['close']?.();
 
             expect((service as any).deviceConnections.has('aabbccddeeff')).toBe(false);
+        });
+
+        it('leaves unrelated device mappings untouched on close', () => {
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+            // A mapping pointing at a different (unrelated) connection
+            (service as any).deviceConnections.set('112233445566', '10.0.0.9:9999');
+
+            socketHandlers['close']?.();
+
+            expect((service as any).deviceConnections.has('aabbccddeeff')).toBe(false);
+            expect((service as any).deviceConnections.get('112233445566')).toBe('10.0.0.9:9999');
+        });
+
+        it('does nothing when the closing socket has no remoteAddress/remotePort', () => {
+            serverHandlers['connection']?.(addresslessSocket);
+            expect(() => addresslessSocketHandlers['close']?.()).not.toThrow();
         });
     });
 
@@ -292,6 +342,37 @@ describe('LocalSocketService', () => {
             socketHandlers['error']?.(err);
 
             expect(mockSocket.destroy).not.toHaveBeenCalled();
+        });
+
+        it('cleans up the deviceConnections mapping for a fatal error on that connection', () => {
+            // Register a device on this connection first so there's a mapping to clean up
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+            const deviceConnections = (service as any).deviceConnections;
+            expect(deviceConnections.has('aabbccddeeff')).toBe(true);
+
+            const err = Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
+            socketHandlers['error']?.(err);
+
+            expect(deviceConnections.has('aabbccddeeff')).toBe(false);
+        });
+
+        it('leaves unrelated device mappings untouched on a fatal error', () => {
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+            (service as any).deviceConnections.set('112233445566', '10.0.0.9:9999');
+
+            const err = Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
+            socketHandlers['error']?.(err);
+
+            expect((service as any).deviceConnections.get('112233445566')).toBe('10.0.0.9:9999');
+        });
+
+        it('logs "unknown" connection and skips cleanup for a fatal error with no remoteAddress/remotePort', () => {
+            serverHandlers['connection']?.(addresslessSocket);
+            const err = Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
+
+            expect(() => addresslessSocketHandlers['error']?.(err)).not.toThrow();
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('connection unknown'));
         });
     });
 
@@ -371,6 +452,77 @@ describe('LocalSocketService', () => {
 
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('No connection mapping'));
         });
+
+        it('warns when the mapped device connectionKey has no socket in clients', () => {
+            const connectionKey = `${mockSocket.remoteAddress}:${mockSocket.remotePort}`;
+            (service as any).clients.delete(connectionKey);
+
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0xaa; commandBuf[3] = 0xbb; commandBuf[4] = 0xcc;
+            commandBuf[5] = 0xdd; commandBuf[6] = 0xee; commandBuf[7] = 0xff;
+
+            cloudSocketHandlers['data']?.(commandBuf);
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('No socket found for device aabbccddeeff'));
+        });
+
+        it('emits deviceSetupUpdate for a 15-byte cloud setup packet', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
+
+            const setupBuf = Buffer.alloc(15);
+            setupBuf[2] = 0xaa; setupBuf[3] = 0xbb; setupBuf[4] = 0xcc;
+            setupBuf[5] = 0xdd; setupBuf[6] = 0xee; setupBuf[7] = 0xff;
+
+            cloudSocketHandlers['data']?.(setupBuf);
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('does nothing for cloud data shorter than 8 bytes', () => {
+            expect(() => cloudSocketHandlers['data']?.(Buffer.alloc(5))).not.toThrow();
+            expect(mockSocket.write).not.toHaveBeenCalled();
+        });
+
+        it('emits deviceSetupUpdate for a 16-byte cloud setup packet', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
+
+            const setupBuf = Buffer.alloc(16);
+            setupBuf[2] = 0xaa; setupBuf[3] = 0xbb; setupBuf[4] = 0xcc;
+            setupBuf[5] = 0xdd; setupBuf[6] = 0xee; setupBuf[7] = 0xff;
+
+            cloudSocketHandlers['data']?.(setupBuf);
+
+            expect(listener).toHaveBeenCalled();
+        });
+    });
+
+    describe('initEventListener wiring', () => {
+        beforeEach(() => {
+            serverHandlers['connection']?.(mockSocket);
+            socketHandlers['data']?.(make21ByteBuffer('aabbccddeeff'));
+        });
+
+        it('routes REMOTE_SOCKET_DATA_UPDATE_RECEIVED to write()', () => {
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0xaa; commandBuf[3] = 0xbb; commandBuf[4] = 0xcc;
+            commandBuf[5] = 0xdd; commandBuf[6] = 0xee; commandBuf[7] = 0xff;
+
+            eventService.remoteSocketDataUpdateReceived(commandBuf, '192.168.1.100');
+
+            expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
+
+        it('routes LOCAL_SOCKET_DATA_UPDATE to write()', () => {
+            const commandBuf = Buffer.alloc(13);
+            commandBuf[2] = 0xaa; commandBuf[3] = 0xbb; commandBuf[4] = 0xcc;
+            commandBuf[5] = 0xdd; commandBuf[6] = 0xee; commandBuf[7] = 0xff;
+
+            eventService.localSocketDataUpdate(commandBuf, '192.168.1.100');
+
+            expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
     });
 
     describe('write()', () => {
@@ -436,6 +588,28 @@ describe('LocalSocketService', () => {
 
             // Fallback path writes via remoteAddress
             expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
+
+        it('skips serial-based routing and falls back to remoteAddress for a buffer shorter than 8 bytes', () => {
+            serverHandlers['connection']?.(mockSocket);
+            (service as any).clients.set('192.168.1.100', mockSocket);
+
+            const shortBuf = Buffer.alloc(5);
+            service.write(shortBuf, '192.168.1.100');
+
+            expect(mockSocket.write).toHaveBeenCalledWith(shortBuf);
+        });
+    });
+
+    describe('close()', () => {
+        it('closes the TCP server and destroys all client sockets', () => {
+            serverHandlers['connection']?.(mockSocket);
+
+            service.close();
+
+            expect(mockServer.close).toHaveBeenCalled();
+            expect(mockSocket.destroy).toHaveBeenCalled();
+            expect((service as any).clients.size).toBe(0);
         });
     });
 });

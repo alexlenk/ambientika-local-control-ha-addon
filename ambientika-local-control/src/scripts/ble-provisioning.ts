@@ -1,3 +1,7 @@
+// One-off BLE provisioning tool — not part of the add-on build (excluded in tsconfig.json).
+// node-ble drags in vulnerable transitive deps we don't want in the main devDependency tree
+// (see #50), so it isn't installed by `npm install`. Run this script by first installing it
+// standalone: `npm i node-ble --no-save`, then `npx ts-node src/scripts/ble-provisioning.ts`.
 import {Adapter, createBluetooth, Device, GattServer, GattService} from 'node-ble';
 
 const {bluetooth, destroy} = createBluetooth()
@@ -31,8 +35,8 @@ const start = async function () {
                     const host = HOST_CHAR_PREFIX + CLOUD_HOST;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(host));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);
@@ -41,8 +45,8 @@ const start = async function () {
                     const wifi = SSID_CHAR_PREFIX + SSID;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(wifi));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);
@@ -51,8 +55,8 @@ const start = async function () {
                     const wifiPw = PWD_CHAR_PREFIX + PWD;
                     try {
                         await wifiServiceCharacteristics.writeValue(Buffer.from(wifiPw));
-                    } catch (err: any) {
-                        if (err.type === 'org.bluez.Error.InvalidArguments') {
+                    } catch (err) {
+                        if ((err as { type?: string }).type === 'org.bluez.Error.InvalidArguments') {
                             console.log('Ignore InvalidArguments');
                         } else {
                             console.error(err);

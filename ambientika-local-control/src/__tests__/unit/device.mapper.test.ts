@@ -102,6 +102,65 @@ describe('DeviceMapper', () => {
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown device role'));
         });
 
+        it('falls back to SMART operatingMode for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 8); // unknown operatingMode
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.operatingMode).toBe('SMART');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown operatingMode'));
+        });
+
+        it('falls back to DRY humidityLevel for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 10); // unknown humidityLevel
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.humidityLevel).toBe('DRY');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown humidityLevel'));
+        });
+
+        it('falls back to VERY_GOOD airQuality for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 13); // unknown airQuality
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.airQuality).toBe('VERY_GOOD');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown airQuality'));
+        });
+
+        it('falls back to GOOD filterStatus for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 15); // unknown filterStatus
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.filterStatus).toBe('GOOD');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown filterStatus'));
+        });
+
+        it('falls back to SMART lastOperatingMode for unknown value and logs warning', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 18); // unknown lastOperatingMode
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.lastOperatingMode).toBe('SMART');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown lastOperatingMode'));
+        });
+
+        it('falls back to NOT_AVAILABLE lightSensitivity for unknown value on a 21-byte buffer', () => {
+            const buf = Buffer.alloc(21);
+            buf.writeUInt8(99, 19); // unknown lightSensitivity, but buffer is full 21 bytes
+
+            const device = mapper.deviceFromSocketBuffer(buf, '10.0.0.1');
+
+            expect(device.lightSensitivity).toBe('NOT_AVAILABLE');
+        });
+
         it('parses a 19-byte legacy status buffer (firmware 0.0.11, #36)', () => {
             // Real payload captured from firmware 0.0.11 (radio/micro), serial synthesized:
             // 01 00 | aa bb cc dd ee ff | 03 01 01 1b 35 00 00 00 01 00 03
@@ -222,6 +281,17 @@ describe('DeviceMapper', () => {
             expect(setup.deviceRole).toBe('MASTER');
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown device role'));
         });
+
+        it('returns houseId 0 and logs a warning when the buffer is too short for the LE houseId slice', () => {
+            // 10-byte buffer: not the 15-byte cloud format, so the 16-byte-format branch
+            // (getUInt32LEFromBufferSlice(12, 16)) is taken, but the buffer is too short for it.
+            const buf = Buffer.alloc(10);
+
+            const setup = mapper.deviceSetupFromSocketBuffer(buf);
+
+            expect(setup.houseId).toBe(0);
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not get uint32le from buffer'));
+        });
     });
 
     describe('deviceFilterResetFromSocketBuffer', () => {
@@ -239,6 +309,41 @@ describe('DeviceMapper', () => {
 
             expect(result.serialNumber).toBe('112233445566');
             expect(result.filterReset).toBe(1);
+        });
+    });
+
+    describe('deviceDeviceCommandFromSocketBuffer', () => {
+        it('parses a valid command buffer', () => {
+            const buf = Buffer.alloc(13);
+            buf.writeUInt8(0xaa, 2); buf.writeUInt8(0xbb, 3); buf.writeUInt8(0xcc, 4);
+            buf.writeUInt8(0xdd, 5); buf.writeUInt8(0xee, 6); buf.writeUInt8(0xff, 7);
+            buf.writeUInt8(OperatingMode.AUTO, 9);
+            buf.writeUInt8(FanSpeed.HIGH, 10);
+            buf.writeUInt8(HumidityLevel.MOIST, 11);
+            buf.writeUInt8(LightSensitivity.MEDIUM, 12);
+
+            const command = mapper.deviceDeviceCommandFromSocketBuffer(buf);
+
+            expect(command.serialNumber).toBe('aabbccddeeff');
+            expect(command.operatingMode).toBe('AUTO');
+            expect(command.fanSpeed).toBe('HIGH');
+            expect(command.humidityLevel).toBe('MOIST');
+            expect(command.lightSensitivity).toBe('MEDIUM');
+        });
+
+        it('falls back to defaults for unrecognized enum byte values', () => {
+            const buf = Buffer.alloc(13);
+            buf.writeUInt8(99, 9);  // operatingMode: no such enum value
+            buf.writeUInt8(99, 10); // fanSpeed: no such enum value
+            buf.writeUInt8(99, 11); // humidityLevel: no such enum value
+            buf.writeUInt8(99, 12); // lightSensitivity: no such enum value
+
+            const command = mapper.deviceDeviceCommandFromSocketBuffer(buf);
+
+            expect(command.operatingMode).toBe('SMART');
+            expect(command.fanSpeed).toBe('MEDIUM');
+            expect(command.humidityLevel).toBe('DRY');
+            expect(command.lightSensitivity).toBe('NOT_AVAILABLE');
         });
     });
 
@@ -326,6 +431,36 @@ it('passes through undefined serialNumber', () => {
             const shortBuf = Buffer.alloc(14);
             mapper.deviceFromSocketBuffer(shortBuf, '10.0.0.1');
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not get boolean from buffer'));
+        });
+    });
+
+    describe('getHexStringFromBufferSlice masking registration', () => {
+        it('does not register for masking when the slice is not the (2,8) serial range', () => {
+            // Every production caller reads bytes 2-8; exercise the private method directly
+            // with a different range to confirm masking registration is scoped correctly.
+            (mapper as any).buffer = Buffer.alloc(13, 0xab);
+            const result = (mapper as any).getHexStringFromBufferSlice(9, 11);
+            expect(result).toBe('abab');
+        });
+    });
+
+    describe('getHexStringFromBufferSlice error path', () => {
+        it('returns empty string and logs a warning when buffer is too short for the serial slice', () => {
+            const shortBuf = Buffer.alloc(3);
+            const result = mapper.deviceFilterResetFromSocketBuffer(shortBuf);
+            expect(result.serialNumber).toBe('');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not hex string from buffer'));
+        });
+    });
+
+    describe('getUInt32BEFromBufferSlice error path', () => {
+        it('returns 0 and logs a warning when the buffer is too short for the BE slice', () => {
+            // Unreachable via the public API (its only caller guards data.length >= 7 first),
+            // so exercise the private method directly to cover its own defensive branch.
+            (mapper as any).buffer = Buffer.alloc(3);
+            const result = (mapper as any).getUInt32BEFromBufferSlice(3, 7);
+            expect(result).toBe(0);
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Could not get uint32be from buffer'));
         });
     });
 

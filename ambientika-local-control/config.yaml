@@ -1,5 +1,5 @@
 name: Ambientika Local Control
-version: "1.1.21"
+version: "1.2.0"
 slug: ambientika_local_control
 description: Local control for Ambientika devices with MQTT integration (based on ambientika-local-control by sragas)
 url: https://github.com/alexlenk/ambientika-local-control-ha-addon
@@ -15,6 +15,10 @@ ports:
 ports_description:
   3000/tcp: REST API port
   11000/tcp: Device communication port
+# Assumes rest_api_port is left at its default (3000) — the watchdog's [PORT:3000]
+# token maps to the static `ports` entry above, not the configurable rest_api_port
+# option, so changing rest_api_port means the watchdog checks the wrong port.
+watchdog: "http://[HOST]:[PORT:3000]/health"
 options:
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
@@ -28,6 +32,11 @@ options:
   local_socket_port: 11000
   udp_broadcast_start_port: 45000
   log_level: info
+  log_full_serials: false
+  enable_raw_commands: false
+  rest_api_bind: "0.0.0.0"
+  rest_api_token: ""
+  enable_debug_endpoints: false
 schema:
   mqtt_host: str
   mqtt_port: int(1,65535)
@@ -41,4 +50,9 @@ schema:
   local_socket_port: int(1,65535)
   udp_broadcast_start_port: int(1,65535)
   log_level: list(silly|debug|info|warn|error)?
+  log_full_serials: bool?
+  enable_raw_commands: bool?
+  rest_api_bind: str?
+  rest_api_token: password?
+  enable_debug_endpoints: bool?
 source_url: https://github.com/sragas/ambientika-local-control

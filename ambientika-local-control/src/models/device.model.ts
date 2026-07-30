@@ -1,5 +1,3 @@
-import {Instant} from '@js-joda/core';
-
 export class Device {
     serialNumber: string;
     operatingMode: string;
@@ -16,8 +14,6 @@ export class Device {
     lightSensitivity: string;
     remoteAddress: string;
     signalStrength: number;
-    lastUpdate: Instant;
-    firstSeen: Instant;
 
     constructor(serialNumber: string, operatingMode: string, fanSpeed: string, humidityLevel: string, temperature: number,
                 humidity: number, airQuality: string, humidityAlarm: boolean, filterStatus: string, nightAlarm: boolean,

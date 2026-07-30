@@ -85,6 +85,15 @@ describe('HAAutoDiscoveryService', () => {
             expect(msg.preset_modes).toContain('NIGHT');
         });
 
+        it('preset_modes falls back to empty array when env var is unset', () => {
+            const original = process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES;
+            delete process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES;
+            const device = makeDevice();
+            const msg = JSON.parse(service.getClimateDeviceDiscoveryMessage(device));
+            expect(msg.preset_modes).toEqual([]);
+            process.env.HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES = original;
+        });
+
         it('modes is ["off", "fan_only"]', () => {
             const device = makeDevice();
             const msg = JSON.parse(service.getClimateDeviceDiscoveryMessage(device));

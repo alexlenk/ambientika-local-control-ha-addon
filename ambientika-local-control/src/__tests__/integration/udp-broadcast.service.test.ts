@@ -67,6 +67,13 @@ describe('UDPBroadcastService', () => {
             expect(mockUdpSocket.bind).toHaveBeenCalledWith(45015);
         });
 
+        it('defaults to port 45000 when the start port env var is unset', () => {
+            delete process.env.UDP_BROADCAST_LISTENER_START_PORT;
+            new UDPBroadcastService(mockLog, eventService);
+
+            expect(mockUdpSocket.bind).toHaveBeenCalledWith(45000);
+        });
+
         it('registers message and listening event handlers', () => {
             new UDPBroadcastService(mockLog, eventService);
 
@@ -234,6 +241,44 @@ describe('UDPBroadcastService', () => {
 
             const map = (service as any).localAddressesSerialNumbers;
             expect(map.has('192.168.1.100')).toBe(false);
+        });
+
+        it('falls back to IP-only cleanup when the exact IP:port key was never tracked', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+            const device = makeDevice('aabbccddeeff', '192.168.1.100:12345');
+            eventService.deviceStatusUpdate(device);
+
+            // Disconnect fires with just the IP (no port) — ipPortToSerial has no match
+            // for this exact key, so the fallback IP-only cleanup path should run.
+            eventService.localSocketDisconnected('192.168.1.100');
+
+            const map = (service as any).localAddressesSerialNumbers;
+            const ipToAllSerials = (service as any).ipToAllSerials;
+            expect(map.has('192.168.1.100')).toBe(false);
+            expect(ipToAllSerials.has('192.168.1.100')).toBe(false);
+        });
+
+        it('does not throw when the serial-set mapping for the IP is already gone', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+            const device = makeDevice('aabbccddeeff', '192.168.1.100:12345');
+            eventService.deviceStatusUpdate(device);
+
+            // Simulate the ipToAllSerials entry having already been cleared out-of-band,
+            // while the exact ipPortToSerial mapping is still present.
+            (service as any).ipToAllSerials.delete('192.168.1.100');
+
+            expect(() => eventService.localSocketDisconnected('192.168.1.100:12345')).not.toThrow();
+        });
+    });
+
+    describe('close()', () => {
+        it('closes all zone listener sockets', () => {
+            const service = new UDPBroadcastService(mockLog, eventService);
+
+            service.close();
+
+            expect(mockUdpSocket.close).toHaveBeenCalled();
+            expect((service as any).listener.size).toBe(0);
         });
     });
 });
