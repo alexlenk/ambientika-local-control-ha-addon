@@ -7,6 +7,7 @@ import { DeviceDto } from '../../dto/device.dto';
 import { WeatherUpdateDto } from '../../dto/weather-update.dto';
 import { DeviceSetupDto } from '../../dto/device-setup.dto';
 import { OperatingMode } from '../../models/enum/operating-mode.enum';
+import { FanSpeed } from '../../models/enum/fan-speed.enum';
 
 const mockLog = {
     debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), silly: vi.fn(),
@@ -34,6 +35,11 @@ const mockStorage = {
     getDevices: vi.fn(),
 } as any;
 
+// Matches DeviceCommandService.COMMAND_DEBOUNCE_MS — dispatch is deferred by this long so that
+// companion commands fired on separate MQTT topics for one compound HA action (fan speed +
+// mode, etc.) land in the same batch and get merged into a single device packet (see #68).
+const DEBOUNCE_MS = 250;
+
 describe('DeviceCommandService', () => {
     let eventService: EventService;
     let service: DeviceCommandService;
@@ -59,8 +65,23 @@ describe('DeviceCommandService', () => {
             eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(listener).toHaveBeenCalled();
+        });
+
+        it('does not dispatch before the debounce window elapses', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS - 1);
+
+            expect(listener).not.toHaveBeenCalled();
         });
 
         it('logs error and does not emit when device not found', () => {
@@ -72,12 +93,13 @@ describe('DeviceCommandService', () => {
             eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(listener).not.toHaveBeenCalled();
             expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('not found in database'));
         });
 
-        it('second command is queued and not dispatched while first is processing', () => {
+        it('coalesces two commands for different fields arriving within the debounce window into one packet (#68)', () => {
             mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
@@ -85,14 +107,20 @@ describe('DeviceCommandService', () => {
             const listener = vi.fn();
             eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
 
-            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
-            eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO' }, 'aabbccddeeff');
+            // Simulates HA firing two separate MQTT command topics for one compound action
+            // (e.g. "high fan speed" + "intake mode") milliseconds apart.
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'INTAKE' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
-            // Only one command dispatched — second is waiting in queue
+            // A single merged packet, not one per command — the device only beeps once.
             expect(listener).toHaveBeenCalledTimes(1);
+            const [data] = listener.mock.calls[0];
+            expect((data as Buffer)[9]).toBe(OperatingMode.INTAKE); // operating mode byte
+            expect((data as Buffer)[10]).toBe(FanSpeed.HIGH); // fan speed byte
         });
 
-        it('processes next command from queue after device responds', () => {
+        it('coalesces two commands for the same field within the window using the last value', () => {
             mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
@@ -102,14 +130,49 @@ describe('DeviceCommandService', () => {
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
             eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
-            // Device responds → clears processing → dispatches second command
+            expect(listener).toHaveBeenCalledTimes(1);
+            const [data] = listener.mock.calls[0];
+            expect((data as Buffer)[9]).toBe(OperatingMode.AUTO);
+        });
+
+        it('does not schedule a second flush while one is already pending for the same device', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            const debounceTimers = (service as any).debounceTimers as Map<string, unknown>;
+            const timerAfterFirst = debounceTimers.get('aabbccddeeff');
+
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+
+            expect(debounceTimers.get('aabbccddeeff')).toBe(timerAfterFirst);
+        });
+
+        it('sends a command queued while another is in flight as a separate packet once the device responds', () => {
+            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
+            );
+
+            const listener = vi.fn();
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
+
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS); // dispatches NIGHT, starts the ack timeout
+
+            // Arrives after NIGHT is already in flight — queues behind it instead of merging in
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO' }, 'aabbccddeeff');
+
+            // Device responds → clears in-flight state → schedules a fresh flush for AUTO
             eventService.deviceStatusUpdate(makeDevice());
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(listener).toHaveBeenCalledTimes(2);
         });
 
-        it('command times out after COMMAND_TIMEOUT_MS and processes next command', () => {
+        it('command times out after COMMAND_TIMEOUT_MS and processes the next queued command', () => {
             mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
@@ -118,12 +181,15 @@ describe('DeviceCommandService', () => {
             eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, listener);
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS); // dispatches NIGHT
+
             eventService.deviceOperatingModeUpdate({ operatingMode: 'AUTO' }, 'aabbccddeeff');
 
-            // Advance past the 5 second timeout
+            // Advance past the 5 second ack timeout, then past the follow-up debounce window
             vi.advanceTimersByTime(5001);
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
-            // Timeout fires — second command should now be dispatched
+            // Timeout fires — the queued AUTO command should now be dispatched
             expect(listener).toHaveBeenCalledTimes(2);
         });
 
@@ -133,6 +199,7 @@ describe('DeviceCommandService', () => {
             );
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             vi.advanceTimersByTime(5001);
 
@@ -160,6 +227,7 @@ describe('DeviceCommandService', () => {
 
             // MODE_COMMAND_TOPIC maps 'fan_only' → OperatingMode.LAST.toString() === 'LAST'
             eventService.deviceOperatingModeUpdate({ operatingMode: 'LAST' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(listener).toHaveBeenCalled();
         });
@@ -177,6 +245,7 @@ describe('DeviceCommandService', () => {
             eventService.deviceOperatingModeUpdate(
                 { operatingMode: OperatingMode.LAST.toString() }, 'aabbccddeeff'
             );
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             // Buffer byte 9 holds the operating mode; device's lastOperatingMode is 'SMART' (0)
             expect(capturedData?.[9]).toBe(OperatingMode.SMART);
@@ -194,6 +263,7 @@ describe('DeviceCommandService', () => {
             );
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('SLAVE role'));
         });
@@ -208,6 +278,7 @@ describe('DeviceCommandService', () => {
             );
 
             eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('MASTER_SLAVE_FLOW'));
         });
@@ -225,6 +296,7 @@ describe('DeviceCommandService', () => {
             });
 
             eventService.deviceOperatingModeUpdate({ fanSpeed: 'BOGUS' as any }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown fanSpeed'));
             expect(capturedData?.[10]).toBe(1); // FanSpeed.MEDIUM
@@ -256,6 +328,7 @@ describe('DeviceCommandService', () => {
 
             // Only fanSpeed provided — no operatingMode — uses device's current mode
             eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(listener).toHaveBeenCalled();
         });
@@ -458,6 +531,7 @@ describe('DeviceCommandService', () => {
             );
 
             eventService.deviceOperatingModeUpdate({}, 'aabbccddeeff');
+            vi.advanceTimersByTime(DEBOUNCE_MS);
 
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown fanSpeed value BOGUS'));
         });
