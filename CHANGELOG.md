@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.2.1 - Coalesce near-simultaneous MQTT commands to avoid double device beep
+
+#### Fixed
+- **MQTT command dispatch**: Home Assistant fires each changed climate attribute (fan speed, mode, ...) as a separate MQTT message on its own topic. Without coalescing, a single compound HA action (e.g. "high fan + intake") produced two separate device commands, and the device beeps once per command received — a double beep for one logical action. Commands for the same device are now debounced for 250ms and merged (last value wins per field) into a single packet before dispatch; the MQTT broker is local, so companion messages HA fires together arrive within single-digit milliseconds, well inside that window. (#68)
+
+---
+
 ### Version 1.2.0 - Reliability hardening: graceful shutdown, crash handlers, REST/MQTT security, node:sqlite
 
 #### Added
