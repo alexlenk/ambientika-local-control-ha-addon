@@ -19,7 +19,14 @@ export class DeviceCommandService {
     private deviceMapper: DeviceMapper;
     private commandQueues: Map<string, Array<{ command: OperatingModeDto, timestamp: number }>> = new Map();
     private processingCommands: Map<string, { command: OperatingModeDto, timeoutId: NodeJS.Timeout }> = new Map();
+    private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
     private readonly COMMAND_TIMEOUT_MS = 5000; // 5 seconds timeout for device response
+    // HA publishes each changed climate attribute (fan speed, mode, ...) as a separate MQTT
+    // message; without coalescing, a single compound HA action (e.g. "high fan + intake")
+    // becomes two separate device commands, and the device beeps once per command received.
+    // The broker is local, so companion messages fired together by HA arrive within single-digit
+    // milliseconds — this window just needs comfortable margin over that. See #68.
+    private readonly COMMAND_DEBOUNCE_MS = 250;
 
     constructor(private log: Logger,
                 private deviceStorageService: DeviceStorageService,
@@ -62,29 +69,48 @@ export class DeviceCommandService {
             this.log.info(`✅ Device ${device.serialNumber} responded - clearing timeout`);
             clearTimeout(processing.timeoutId);
             this.processingCommands.delete(device.serialNumber);
-            
-            // Process next command in queue if available
-            this.processNextCommand(device.serialNumber);
+
+            // Coalesce whatever queued up while this command was in flight, rather than
+            // dispatching it immediately (see #68).
+            this.scheduleFlush(device.serialNumber);
         }
     }
 
     private handleOperatingModeUpdate(opMode: OperatingModeDto, serialNumber: string): void {
         const now = Date.now();
-        
+
         // Add command to queue
         if (!this.commandQueues.has(serialNumber)) {
             this.commandQueues.set(serialNumber, []);
         }
-        
+
         const queue = this.commandQueues.get(serialNumber)!;
         queue.push({ command: opMode, timestamp: now });
-        
+
         this.log.info(`📥 Queued command for ${serialNumber}: ${JSON.stringify(opMode)} (queue length: ${queue.length})`);
-        
+
         // Start processing if not already processing a command for this device
         if (!this.processingCommands.has(serialNumber)) {
-            this.processNextCommand(serialNumber);
+            this.scheduleFlush(serialNumber);
         }
+    }
+
+    // Debounces dispatch so that companion commands HA fires on separate MQTT topics for a
+    // single compound action (e.g. fan speed + mode) land in the same queue drain and get
+    // merged into one device packet instead of one beep-inducing packet each. See #68.
+    private scheduleFlush(serialNumber: string): void {
+        if (this.debounceTimers.has(serialNumber)) {
+            return; // A flush is already pending — new commands just join that batch
+        }
+        const queue = this.commandQueues.get(serialNumber);
+        if (!queue || queue.length === 0) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            this.debounceTimers.delete(serialNumber);
+            this.processNextCommand(serialNumber);
+        }, this.COMMAND_DEBOUNCE_MS);
+        this.debounceTimers.set(serialNumber, timer);
     }
 
     private processNextCommand(serialNumber: string): void {
@@ -98,38 +124,44 @@ export class DeviceCommandService {
             return;
         }
 
-        const next = queue.shift()!; // Remove first command from queue
-        const opMode = next.command;
-        
-        this.log.info(`🚀 Processing command for ${serialNumber}: ${JSON.stringify(opMode)} (remaining: ${queue.length})`);
-        
+        // Drain everything queued during the debounce window and merge it into a single
+        // command (last value wins per field) instead of sending one packet per queued entry.
+        const batch = queue.splice(0, queue.length);
+        const opMode: OperatingModeDto = batch.reduce(
+            (merged, item) => ({...merged, ...item.command}),
+            {} as OperatingModeDto
+        );
+
+        this.log.info(`🚀 Processing ${batch.length} coalesced command(s) for ${serialNumber}: ${JSON.stringify(opMode)}`);
+
         this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
             (dto: DeviceDto | undefined) => {
                 if (dto) {
                     const device = this.deviceMapper.deviceFromDto(dto);
                     this.log.info(`Current device state: mode=${device.operatingMode}, lastMode=${device.lastOperatingMode}, fanSpeed=${device.fanSpeed}, role=${device.deviceRole}`);
-                    
+
                     const data = this.getUpdateBufferData(opMode, device);
                     this.log.info(`Generated command buffer: ${data.toString('hex')}`);
                     this.analyzeCommandBuffer(data, opMode, device);
-                    
+
                     // Setup timeout for device response
                     const timeoutId = setTimeout(() => {
                         this.log.error(`❌ Device ${serialNumber} did not respond within ${this.COMMAND_TIMEOUT_MS}ms`);
                         this.log.error(`❌ Command that timed out: ${JSON.stringify(opMode)}`);
                         this.log.error(`❌ Device may be unresponsive - check socket connection`);
                         this.processingCommands.delete(serialNumber);
-                        // Process next command in queue if available
-                        this.processNextCommand(serialNumber);
+                        this.scheduleFlush(serialNumber);
                     }, this.COMMAND_TIMEOUT_MS);
-                    
+
                     this.processingCommands.set(serialNumber, { command: opMode, timeoutId });
                     this.log.info(`⏱️  Command timeout set for ${this.COMMAND_TIMEOUT_MS}ms`);
-                    
+
                     this.localSocketDataUpdate(data, device.remoteAddress);
                 } else {
                     this.log.error(`❌ Device ${serialNumber} not found in database, cannot process command`);
-                    // Process next command if device not found
+                    // The batch was already drained from the queue above and is lost — this
+                    // call only picks up anything that arrived since, matching the queue-empty
+                    // early return in processNextCommand itself.
                     this.processNextCommand(serialNumber);
                 }
             });
