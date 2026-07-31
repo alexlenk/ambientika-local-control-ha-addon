@@ -123,6 +123,7 @@ Publishes Home Assistant MQTT auto-discovery messages so devices appear automati
 - Always work on the `dev` branch; never commit directly to `master`.
 - Commit after each logical unit; commit messages explain *why*, not just *what*.
 - `config.yaml` version is the single source of truth — `package.json` has no version field intentionally.
+- **Any user-facing behavior change or feature add gets a version bump and release as part of the same piece of work — proactively, without waiting to be asked.** A merged PR that changes runtime behavior isn't done until `config.yaml`'s version is bumped and `CHANGELOG.md` has an entry for it; otherwise the fix sits on `master` but never reaches a released Docker image. Pure internal changes with no user-visible effect (test-only changes, CI tweaks, refactors) don't need a version bump on their own — bundle them into the next behavior-changing release instead.
 
 ## Release process
 
