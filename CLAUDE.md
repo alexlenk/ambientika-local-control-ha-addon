@@ -85,6 +85,7 @@ SchedulerService            — marks stale devices offline every minute
 
 Devices speak a binary TCP protocol. Key packet sizes:
 - **21 bytes** — device status (parsed by `DeviceMapper.deviceFromSocketBuffer`)
+- **19 bytes** — legacy device status (radio/micro firmware 0.0.11, #36): same layout through byte 18, missing `lightSensitivity`/`signalStrength` (defaulted to `NOT_AVAILABLE`/`0`)
 - **18 bytes** — device info / firmware versions
 - **16 bytes** — device setup: `02 00 <MAC 6b> 00 <role> <zone> 00 <houseId 4b LE>` (bytes 8 and 11 are fixed `00`)
 - **13 bytes** — operating mode command sent to device
@@ -100,8 +101,10 @@ Byte layout and enum values are documented in `src/models/enum/` JSDoc and in th
 - `DeviceRole` — MASTER=0, SLAVE_EQUAL_MASTER=1, SLAVE_OPPOSITE_MASTER=2. **Commands always go to MASTER only.**
 - `HumidityLevel` — DRY=0 (40%), NORMAL=1 (60%), MOIST=2 (75%).
 - `AirQuality` — 5 levels: VERY_GOOD, GOOD, MEDIUM, POOR, BAD (byte 13 of status packet).
-- `FilterStatus` — GOOD or CLOGGED (byte 14 of status packet).
+- `FilterStatus` — GOOD or CLOGGED (byte 15 of status packet; byte 14 is the `humidityAlarm` boolean).
 - `LightSensitivity` — NOT_AVAILABLE, OFF, LOW, MEDIUM (byte 19 of status packet).
+
+Full 21-byte status packet field-to-byte mapping (`device.mapper.ts`'s `deviceFromSocketBuffer`): 2-7 MAC/serial, 8 operatingMode, 9 fanSpeed, 10 humidityLevel, 11 temperature, 12 humidity, 13 airQuality, 14 humidityAlarm, 15 filterStatus, 16 nightAlarm, 17 deviceRole, 18 lastOperatingMode, 19 lightSensitivity, 20 signalStrength.
 
 ### REST API (RestService)
 
