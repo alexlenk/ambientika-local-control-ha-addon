@@ -32,7 +32,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.10.0",
+    "@eslint/js": "^10.0.1",
     "@types/express": "^4.17.21",
     "@types/node": "^26.1.2",
     "@types/node-schedule": "^2.1.7",
