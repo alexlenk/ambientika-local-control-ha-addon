@@ -193,6 +193,35 @@ describe('DeviceMapper', () => {
 
             expect(mockLog.warn).not.toHaveBeenCalled();
         });
+
+        it('parses a 22-byte status buffer (firmware 1.1.13+, #72), ignoring the trailing byte', () => {
+            // Layout matches the 21-byte format exactly for bytes 0-20, plus one unidentified
+            // trailing byte (0x01) confirmed via real device captures and a live command/response
+            // test in #72. deviceRole=0xff is a real value this firmware sends for a standalone
+            // master with no paired slave (not in the DeviceRole enum, falls back to MASTER).
+            // 01 00 | aa bb cc dd ee ff | 01 01 01 18 27 00 00 00 00 ff 01 02 bd | 01
+            const buf = Buffer.from('0100aabbccddeeff010101182700000000ff0102bd01', 'hex');
+            expect(buf.length).toBe(22);
+
+            const device = mapper.deviceFromSocketBuffer(buf, '192.168.1.60');
+
+            expect(device.serialNumber).toBe('aabbccddeeff');
+            expect(device.operatingMode).toBe('AUTO');
+            expect(device.fanSpeed).toBe('MEDIUM');
+            expect(device.humidityLevel).toBe('NORMAL');
+            expect(device.temperature).toBe(24);
+            expect(device.humidity).toBe(39);
+            expect(device.airQuality).toBe('VERY_GOOD');
+            expect(device.humidityAlarm).toBe(false);
+            expect(device.filterStatus).toBe('GOOD');
+            expect(device.nightAlarm).toBe(false);
+            expect(device.deviceRole).toBe('MASTER'); // 0xff falls back to MASTER
+            expect(device.lastOperatingMode).toBe('AUTO');
+            expect(device.lightSensitivity).toBe('LOW');
+            expect(device.signalStrength).toBe(189);
+            expect(device.remoteAddress).toBe('192.168.1.60');
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown device role value 255'));
+        });
     });
 
     describe('deviceInformationFromSocketBuffer', () => {

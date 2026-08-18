@@ -24,6 +24,14 @@ export class DeviceMapper {
     constructor(private log: Logger) {
     }
 
+    // Newer radio/micro firmware (observed on 1.1.13, see #72) sends a 22-byte status packet:
+    // the same 21-byte layout below, plus one unidentified trailing byte at index 21 that this
+    // parser doesn't read (every existing field slice only checks a minimum length, so a longer
+    // buffer parses identically to a 21-byte one). Confirmed against real device captures,
+    // including a live command/response test that traced a light-sensitivity change through to
+    // the expected byte. On this firmware, a standalone master with no paired slave reports
+    // deviceRole as 0xFF (not in the DeviceRole enum below), which falls back to MASTER — that
+    // happens to be correct here, but hasn't been confirmed against a paired master+slave setup.
     deviceFromSocketBuffer(data: Buffer, remoteAddress: string): Device {
         this.buffer = data;
         const serialNumber = this.getHexStringFromBufferSlice(2,8);
