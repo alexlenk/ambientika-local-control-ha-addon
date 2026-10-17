@@ -216,6 +216,24 @@ describe('MqttService', () => {
             expect(mockMqttClient.subscribe).toHaveBeenCalledWith('homeassistant/status', expect.any(Function));
         });
 
+        it('subscribes to the shared weather topic once on MQTT connect (#92)', () => {
+            process.env.WEATHER_UPDATE_TOPIC = 'ambientika/weather';
+            mqttEventHandlers['connect']?.();
+            expect(mockMqttClient.subscribe).toHaveBeenCalledWith('ambientika/weather', expect.any(Function));
+        });
+
+        it('a device going offline does not unsubscribe the shared weather topic (#92)', () => {
+            process.env.WEATHER_UPDATE_TOPIC = 'ambientika/weather';
+            expect((service as any).getSubscriptionTopics('aabbccddeeff')).not.toContain('ambientika/weather');
+
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+            eventService.deviceOffline(makeDevice());
+
+            const unsubscribed = mockMqttClient.unsubscribe.mock.calls.map(([topic]: [string]) => topic);
+            expect(unsubscribed.length).toBeGreaterThan(0);
+            expect(unsubscribed).not.toContain('ambientika/weather');
+        });
+
         it('clears deviceTopicSubscriptions on reconnect', () => {
             (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
             mqttEventHandlers['reconnect']?.();

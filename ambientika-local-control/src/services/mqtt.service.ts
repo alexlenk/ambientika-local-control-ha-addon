@@ -72,6 +72,12 @@ export class MqttService {
         this.mqttClient = connect(this.mqttConnectionString, options);
         this.mqttClient.on('connect', () => {
             this.subscribeToTopic(process.env.HOME_ASSISTANT_STATUS_TOPIC || 'homeassistant/status');
+            // The weather topic is shared by all devices, so it's subscribed once per connection
+            // rather than per device — a per-device unsubscribe on DEVICE_OFFLINE dropped it for
+            // every device (#92).
+            if (process.env.WEATHER_UPDATE_TOPIC) {
+                this.subscribeToTopic(process.env.WEATHER_UPDATE_TOPIC);
+            }
             this.log.info(`MQTT broker connected`);
         });
         this.mqttClient.on('reconnect', () => {
@@ -531,7 +537,6 @@ export class MqttService {
         if (process.env.ENABLE_RAW_COMMANDS === 'true') {
             topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         }
-        topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
 
