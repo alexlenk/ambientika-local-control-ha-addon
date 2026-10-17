@@ -8,6 +8,7 @@ import {Instant} from '@js-joda/core';
 import {DeviceDto} from '../dto/device.dto';
 import {DeviceMapper} from './device.mapper';
 import {OperatingModeDto} from '../dto/operating-mode.dto';
+import {OperatingMode} from '../models/enum/operating-mode.enum';
 
 dotenv.config()
 
@@ -15,7 +16,12 @@ export class DeviceStorageService {
 
     private db: DatabaseSync;
     private deviceMapper: DeviceMapper;
-    private lastSentCommands: Map<string, OperatingModeDto> = new Map();
+    // Last commanded mode/fan speed per device, published to HA instead of the device-reported
+    // value so the UI doesn't jump back to the old value while the device is still applying the
+    // command. It expires so a command the device rejects or never echoes back (e.g. SMART,
+    // which the device reports as its free-cooling sub-mode) can't pin HA's state forever (#91).
+    private static readonly COMMAND_OVERRIDE_TTL_MS = 30000;
+    private lastSentCommands: Map<string, { command: OperatingModeDto, storedAt: number }> = new Map();
 
     constructor(private log: Logger, private eventService: EventService) {
         this.deviceMapper = new DeviceMapper(this.log);
@@ -79,8 +85,7 @@ export class DeviceStorageService {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.silly(`Storage service local data update received: `, device);
 
-            // Check if we have a pending command for this device - FOR DEBUGGING ONLY
-            const lastCommand = this.lastSentCommands.get(device.serialNumber);
+            const lastCommand = this.getActiveCommand(device.serialNumber);
             if (lastCommand) {
                 // Check if device applied the command
                 let commandApplied = true;
@@ -101,34 +106,61 @@ export class DeviceStorageService {
                 } else {
                     this.log.debug(`Device ${device.serialNumber} command still pending: ${JSON.stringify(lastCommand)}`);
                 }
-
-                // DO NOT OVERRIDE DEVICE STATE - ALWAYS SHOW REALITY
             }
 
             this.saveDevice(device);
         });
 
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
-            this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(opMode)}`);
-            this.lastSentCommands.set(serialNumber, opMode);
-
-            // Commands will be applied via override logic when real device status updates arrive
-            // No need to trigger fake device status updates here
+            const command = {...opMode};
+            // HA's fan_only arrives as the internal LAST sentinel, which the device never
+            // reports back; store the mode it resolves to instead (#91).
+            if (command.operatingMode === OperatingMode.LAST.toString()) {
+                let lastOperatingMode: string | undefined;
+                try {
+                    const existing = this.db.prepare('SELECT lastOperatingMode FROM devices WHERE serialNumber = ?')
+                        .get(serialNumber) as { lastOperatingMode?: string } | undefined;
+                    lastOperatingMode = existing?.lastOperatingMode;
+                } catch (error) {
+                    this.log.error('Error fetching device from db', error);
+                }
+                if (lastOperatingMode) {
+                    command.operatingMode = lastOperatingMode;
+                } else {
+                    delete command.operatingMode;
+                }
+            }
+            // HA sends each changed attribute as a separate message, so merge rather than
+            // replace — otherwise a mode change drops the fan speed sent just before it.
+            const merged = {...this.getActiveCommand(serialNumber), ...command};
+            this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(merged)}`);
+            this.lastSentCommands.set(serialNumber, {command: merged, storedAt: Date.now()});
         });
     }
 
+    private getActiveCommand(serialNumber: string): OperatingModeDto | undefined {
+        const entry = this.lastSentCommands.get(serialNumber);
+        if (!entry) {
+            return undefined;
+        }
+        if (Date.now() - entry.storedAt > DeviceStorageService.COMMAND_OVERRIDE_TTL_MS) {
+            this.log.debug(`Command override for ${serialNumber} expired, showing device-reported state: ${JSON.stringify(entry.command)}`);
+            this.lastSentCommands.delete(serialNumber);
+            return undefined;
+        }
+        return entry.command;
+    }
+
     hasStoredCommand(serialNumber: string): boolean {
-        return this.lastSentCommands.has(serialNumber);
+        return this.getActiveCommand(serialNumber) !== undefined;
     }
 
     getStoredOperatingMode(serialNumber: string): string | undefined {
-        const command = this.lastSentCommands.get(serialNumber);
-        return command?.operatingMode;
+        return this.getActiveCommand(serialNumber)?.operatingMode;
     }
 
     getStoredFanSpeed(serialNumber: string): string | undefined {
-        const command = this.lastSentCommands.get(serialNumber);
-        return command?.fanSpeed;
+        return this.getActiveCommand(serialNumber)?.fanSpeed;
     }
 
     saveDeviceZoneHouseId(serialNumber: string, zone: number | undefined, houseId: number | undefined): void {

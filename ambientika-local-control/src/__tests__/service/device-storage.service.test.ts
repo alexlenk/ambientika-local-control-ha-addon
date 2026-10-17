@@ -79,6 +79,80 @@ describe('DeviceStorageService', () => {
         });
     });
 
+    describe('command override expiry, merging and LAST resolution (#91)', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('keeps the override for 30 s, then falls back to the device-reported state', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+
+            vi.advanceTimersByTime(30000);
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('NIGHT');
+
+            vi.advanceTimersByTime(1);
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+            expect(service.hasStoredCommand('aabbccddeeff')).toBe(false);
+        });
+
+        it('expires a command the device rejects instead of pinning it forever', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            eventService.deviceStatusUpdate(makeDevice()); // still reports AUTO
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('NIGHT');
+
+            vi.advanceTimersByTime(30001);
+            eventService.deviceStatusUpdate(makeDevice());
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+        });
+
+        it('merges separate attribute commands instead of replacing them', () => {
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'INTAKE' }, 'aabbccddeeff');
+
+            expect(service.getStoredFanSpeed('aabbccddeeff')).toBe('HIGH');
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('INTAKE');
+        });
+
+        it('a newer command restarts the expiry window', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(20000);
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'INTAKE' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(20000);
+
+            expect(service.getStoredFanSpeed('aabbccddeeff')).toBe('HIGH');
+        });
+
+        it("stores fan_only (LAST) as the device's last operating mode, never as '12'", () => {
+            service.saveDevice(makeDevice()); // lastOperatingMode = SMART
+            eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff');
+
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('SMART');
+        });
+
+        it('stores no mode override for LAST when the device is unknown', () => {
+            eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff');
+
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+        });
+
+        it('does not mutate the command object other listeners receive', () => {
+            service.saveDevice(makeDevice());
+            const opMode = { operatingMode: '12' };
+            eventService.deviceOperatingModeUpdate(opMode, 'aabbccddeeff');
+
+            expect(opMode.operatingMode).toBe('12');
+        });
+
+        it('logs instead of throwing when resolving LAST fails', () => {
+            service.close();
+            expect(() => eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff')).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching device from db', expect.any(Error));
+        });
+    });
+
     describe('getDevices', () => {
         it('calls callback with empty array when the table has no rows', () => {
             const callback = vi.fn();
