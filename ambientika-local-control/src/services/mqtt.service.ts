@@ -15,6 +15,7 @@ import {DeviceMapper} from './device.mapper';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
 import {DeviceSetupDto} from '../dto/device-setup.dto';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
+import {validateDeviceSetup, validateOperatingMode, validateWeatherUpdate} from './command-validator';
 
 dotenv.config()
 
@@ -616,6 +617,11 @@ export class MqttService {
     private handleWeatherUpdate(message: Buffer): void {
         try {
             const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
+            const error = validateWeatherUpdate(weatherUpdate);
+            if (error) {
+                this.log.warn(`Ignoring weather update: ${error}`);
+                return;
+            }
             this.eventService.deviceWeatherUpdate(weatherUpdate);
         } catch (err) {
             this.log.error('Failed to parse weather update message:', err);
@@ -633,6 +639,11 @@ export class MqttService {
     private handleDeviceSetup(serialNumber: string, message: Buffer): void {
         try {
             const deviceSetupDto = JSON.parse(message.toString()) as DeviceSetupDto;
+            const error = validateDeviceSetup(deviceSetupDto?.deviceRole, deviceSetupDto?.zoneIndex, deviceSetupDto?.houseId);
+            if (error) {
+                this.log.error(`Invalid device setup for ${serialNumber}: ${error}`);
+                return;
+            }
             deviceSetupDto.serialNumber = serialNumber; // Ensure serial number matches topic
             this.log.info(`Device setup received for ${serialNumber}: ${JSON.stringify(deviceSetupDto)}`);
             this.eventService.deviceSetupUpdate(deviceSetupDto);
@@ -645,16 +656,9 @@ export class MqttService {
         try {
             const jsonSetup = JSON.parse(message.toString()) as DeviceSetupJsonDto;
             
-            // Validate required fields
-            if (!jsonSetup.role || jsonSetup.zone === undefined || jsonSetup.houseId === undefined) {
-                this.log.error(`Invalid JSON setup for ${serialNumber}: missing required fields (role, zone, houseId)`);
-                return;
-            }
-            
-            // Validate role
-            const validRoles = ['MASTER', 'SLAVE_EQUAL_MASTER', 'SLAVE_OPPOSITE_MASTER'];
-            if (!validRoles.includes(jsonSetup.role)) {
-                this.log.error(`Invalid device role '${jsonSetup.role}' for ${serialNumber}. Valid roles: ${validRoles.join(', ')}`);
+            const error = validateDeviceSetup(jsonSetup?.role, jsonSetup?.zone, jsonSetup?.houseId);
+            if (error) {
+                this.log.error(`Invalid JSON setup for ${serialNumber}: ${error} (expected role MASTER/SLAVE_EQUAL_MASTER/SLAVE_OPPOSITE_MASTER, zone 0-15, houseId)`);
                 return;
             }
             
@@ -800,10 +804,24 @@ export class MqttService {
     }
 
     private getOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
+        const dto = this.buildOperatingDtoFromTopic(serialNumber, topic, message);
+        const error = dto && validateOperatingMode(dto, true);
+        if (error) {
+            this.log.warn(`Ignoring command for ${serialNumber}: ${error}`);
+            return undefined;
+        }
+        return dto;
+    }
+
+    private buildOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
         const dto: OperatingModeDto = {} as OperatingModeDto;
         const messageString = message.toString();
         switch (topic) {
             case process.env.TARGET_HUMIDITY_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
+                if (Number.isNaN(parseInt(messageString))) {
+                    this.log.warn(`Invalid target humidity '${messageString}' received, ignoring command`);
+                    return undefined;
+                }
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
             case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber): {

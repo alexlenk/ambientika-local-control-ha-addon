@@ -602,7 +602,7 @@ describe('MqttService', () => {
             );
 
             expect(mockLog.error).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid device role 'NOT_A_ROLE'")
+                expect.stringContaining('Invalid role: NOT_A_ROLE')
             );
         });
 
@@ -614,8 +614,76 @@ describe('MqttService', () => {
             );
 
             expect(mockLog.error).toHaveBeenCalledWith(
-                expect.stringContaining('missing required fields')
+                expect.stringContaining('Invalid zone: undefined')
             );
+        });
+
+        describe('input validation (#93)', () => {
+            const commands: any[] = [];
+            beforeEach(() => {
+                commands.length = 0;
+                eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (dto: any) => commands.push(dto));
+            });
+
+            it.each([
+                ['preset/set', 'FOO', 'Invalid operatingMode: FOO'],
+                ['mode/set', 'heat', 'Invalid operatingMode: HEAT'],
+                ['light-sensitivity/set', 'FOO', 'Invalid lightSensitivity: FOO'],
+            ])('ignores %s payload %s instead of sending a wrong frame', (suffix, payload, error) => {
+                mqttEventHandlers['message']?.(`ambientika/aabbccddeeff/${suffix}`, Buffer.from(payload));
+
+                expect(commands).toHaveLength(0);
+                expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining(error));
+            });
+
+            it('ignores a non-numeric target humidity (was sent as MOIST)', () => {
+                mqttEventHandlers['message']?.('ambientika/aabbccddeeff/target-humidity/set', Buffer.from('abc'));
+
+                expect(commands).toHaveLength(0);
+                expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("Invalid target humidity 'abc'"));
+            });
+
+            it('still accepts fan_only, which maps to the internal LAST sentinel', () => {
+                mqttEventHandlers['message']?.('ambientika/aabbccddeeff/mode/set', Buffer.from('fan_only'));
+
+                expect(commands).toEqual([{ operatingMode: '12' }]);
+            });
+
+            it('still accepts valid presets and light sensitivity', () => {
+                mqttEventHandlers['message']?.('ambientika/aabbccddeeff/preset/set', Buffer.from('intake'));
+                mqttEventHandlers['message']?.('ambientika/aabbccddeeff/light-sensitivity/set', Buffer.from('LOW'));
+
+                expect(commands).toEqual([{ operatingMode: 'INTAKE' }, { lightSensitivity: 'LOW' }]);
+            });
+
+            it.each([
+                [{}, 'Invalid temperature: undefined'],
+                [{ temperature: 20, humidity: 200, airQuality: 1 }, 'Invalid humidity: 200'],
+                [null, 'expected an object'],
+            ])('ignores invalid weather update %j', (payload, error) => {
+                const listener = vi.fn();
+                eventService.on(AppEvents.DEVICE_WEATHER_UPDATE, listener);
+
+                mqttEventHandlers['message']?.('ambientika/weather', Buffer.from(JSON.stringify(payload)));
+
+                expect(listener).not.toHaveBeenCalled();
+                expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining(error));
+            });
+
+            it.each([
+                ['setup-json', { role: 'MASTER', zone: 200, houseId: 1 }, 'Invalid zone: 200'],
+                ['setup-json', { role: 'MASTER', zone: 1, houseId: -1 }, 'Invalid houseId: -1'],
+                ['setup', { deviceRole: 'BOSS', zoneIndex: 1, houseId: 1 }, 'Invalid role: BOSS'],
+                ['setup', { deviceRole: 'MASTER', zoneIndex: 16, houseId: 1 }, 'Invalid zone: 16'],
+            ])('rejects out-of-range %s %j', (suffix, payload, error) => {
+                const listener = vi.fn();
+                eventService.on(AppEvents.DEVICE_SETUP_UPDATE, listener);
+
+                mqttEventHandlers['message']?.(`ambientika/aabbccddeeff/${suffix}`, Buffer.from(JSON.stringify(payload)));
+
+                expect(listener).not.toHaveBeenCalled();
+                expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining(error));
+            });
         });
 
         it('warns for unknown topic (topic has serial but no known command)', () => {

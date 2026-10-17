@@ -153,6 +153,23 @@ describe('DeviceStorageService', () => {
         });
     });
 
+    describe('callback errors are not reported as DB errors (#93)', () => {
+        const boom = () => { throw new Error('caller bug'); };
+
+        it.each([
+            ['findExistingDeviceBySerialNumber', (svc: DeviceStorageService) => svc.findExistingDeviceBySerialNumber('aabbccddeeff', boom)],
+            ['findExistingDeviceByRemoteAddress', (svc: DeviceStorageService) => svc.findExistingDeviceByRemoteAddress('192.168.1.1', boom)],
+            ['getDevices', (svc: DeviceStorageService) => svc.getDevices(boom)],
+            ['findZoneMaster', (svc: DeviceStorageService) => svc.findZoneMaster('aabbccddeeff', boom)],
+        ])('%s: logs a callback exception as such and does not rethrow', (_name, call) => {
+            service.saveDevice(makeDevice());
+
+            expect(() => call(service)).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error while handling device lookup result', expect.objectContaining({ message: 'caller bug' }));
+            expect(mockLog.error).not.toHaveBeenCalledWith(expect.stringContaining('Error fetching'), expect.anything());
+        });
+    });
+
     describe('getDevices', () => {
         it('calls callback with empty array when the table has no rows', () => {
             const callback = vi.fn();

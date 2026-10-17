@@ -187,12 +187,14 @@ export class DeviceStorageService {
     }
 
     getDevices(callback: (device: DeviceDto[]) => void): void {
+        let rows: DeviceDto[];
         try {
-            const rows = this.db.prepare('SELECT * FROM devices').all() as unknown as DeviceDto[];
-            callback(rows);
+            rows = this.db.prepare('SELECT * FROM devices').all() as unknown as DeviceDto[];
         } catch (error) {
             this.log.error('Error fetching devices from db', error);
+            return;
         }
+        this.runCallback(() => callback(rows));
     }
 
     deleteDevice(dto: DeviceDto): void {
@@ -207,12 +209,14 @@ export class DeviceStorageService {
     }
 
     findExistingDeviceBySerialNumber(serialNumber: string, callback: (device: (DeviceDto | undefined)) => void): void {
+        let row: DeviceDto | undefined;
         try {
-            const row = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
-            callback(row);
+            row = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
         } catch (error) {
             this.log.error('Error fetching device from db', error);
+            return;
         }
+        this.runCallback(() => callback(row));
     }
 
     // Resolves the master of the zone a device belongs to (a master resolves to itself).
@@ -246,16 +250,30 @@ export class DeviceStorageService {
             this.log.error('Error fetching zone master from db', error);
             return;
         }
-        callback(master);
+        this.runCallback(() => callback(master));
     }
 
     findExistingDeviceByRemoteAddress(remoteAddress: string,
                                       callback: (device: (DeviceDto | undefined)) => void): void {
+        let row: DeviceDto | undefined;
         try {
-            const row = this.db.prepare('SELECT * FROM devices WHERE remoteAddress = ?').get(remoteAddress) as DeviceDto | undefined;
-            callback(row);
+            row = this.db.prepare('SELECT * FROM devices WHERE remoteAddress = ?').get(remoteAddress) as DeviceDto | undefined;
         } catch (error) {
             this.log.error('Error fetching device from db', error);
+            return;
+        }
+        this.runCallback(() => callback(row));
+    }
+
+    // Callbacks run outside the query's try/catch so a bug in the caller isn't reported as a
+    // DB error (it used to surface as "Error fetching device from db", see #93), but are still
+    // caught: these callbacks run inside event handlers, and an uncaught exception there shuts
+    // the whole add-on down.
+    private runCallback(callback: () => void): void {
+        try {
+            callback();
+        } catch (error) {
+            this.log.error('Error while handling device lookup result', error);
         }
     }
 
