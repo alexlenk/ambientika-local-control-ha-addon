@@ -202,6 +202,12 @@ describe('RemoteSocketService', () => {
                 expect(listener).toHaveBeenCalled();
             });
 
+            it('logs every cloud→device frame at info level with its command name (#88)', () => {
+                remoteSocketHandlers['data']?.(make9ByteBuffer());
+
+                expect(mockLog.info).toHaveBeenCalledWith('Cloud command → device aabbccddeeff: FILTER_RESET');
+            });
+
             it('logs debug for 9-byte filter reset data', () => {
                 remoteSocketHandlers['data']?.(make9ByteBuffer());
 

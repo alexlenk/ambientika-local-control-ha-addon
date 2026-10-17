@@ -100,6 +100,7 @@ export class LocalSocketService {
                 // Cloud is sending commands/setup to us — route to the target device by serial
                 if (data.length >= 8) {
                     const serialHex = data.slice(2, 8).toString('hex');
+                    this.log.info(`Cloud command → device ${serialHex}: ${this.deviceMapper.describeCommand(data)}`);
                     const connectionKey = this.deviceConnections.get(serialHex);
                     if (connectionKey) {
                         const client = this.clients.get(connectionKey);
@@ -146,7 +147,11 @@ export class LocalSocketService {
 
                 this.eventService.deviceStatusUpdate(device);
             }
-            if (data.length !== 18 && data.length !== 19 && data.length !== 21 && data.length !== 22) {
+            if (data.length === 8 && data[0] === 0x04) {
+                // Masters send an unidentified 8-byte `04 00 <MAC>` frame every few seconds (#88).
+                // It's harmless and carries no state, so it only clutters the log at warn level.
+                this.log.debug(`Received unidentified 8-byte 04-type packet from ${serverSocket.remoteAddress}:${serverSocket.remotePort}: ${data.toString('hex')}`);
+            } else if (data.length !== 18 && data.length !== 19 && data.length !== 21 && data.length !== 22) {
                 // Device data of an unrecognized length is silently unusable — it never reaches
                 // deviceStatusUpdate, so it's never saved to the DB or published to MQTT. Surface
                 // it at warn level (instead of only the silly-level dump above) so a device sending

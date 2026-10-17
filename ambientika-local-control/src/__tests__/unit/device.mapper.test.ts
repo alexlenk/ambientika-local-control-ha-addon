@@ -323,6 +323,39 @@ describe('DeviceMapper', () => {
         });
     });
 
+    describe('describeCommand', () => {
+        function frame(length: number, commandType?: number): Buffer {
+            const buf = Buffer.alloc(length);
+            if (commandType !== undefined) {
+                buf.writeUInt8(commandType, 8);
+            }
+            return buf;
+        }
+
+        it('names a 9-byte type-3 frame FILTER_RESET', () => {
+            expect(mapper.describeCommand(frame(9, 3))).toBe('FILTER_RESET');
+        });
+
+        it('names 13-byte type-0/1 frames OPERATING_MODE', () => {
+            expect(mapper.describeCommand(frame(13, 0))).toBe('OPERATING_MODE');
+            expect(mapper.describeCommand(frame(13, 1))).toBe('OPERATING_MODE');
+        });
+
+        it('names a 13-byte type-4 frame WEATHER_UPDATE', () => {
+            expect(mapper.describeCommand(frame(13, 4))).toBe('WEATHER_UPDATE');
+        });
+
+        it('names 15- and 16-byte frames DEVICE_SETUP', () => {
+            expect(mapper.describeCommand(frame(15))).toBe('DEVICE_SETUP');
+            expect(mapper.describeCommand(frame(16))).toBe('DEVICE_SETUP');
+        });
+
+        it('reports anything else as UNKNOWN with its length', () => {
+            expect(mapper.describeCommand(frame(9, 7))).toBe('UNKNOWN (9 bytes)');
+            expect(mapper.describeCommand(frame(8))).toBe('UNKNOWN (8 bytes)');
+        });
+    });
+
     describe('deviceFilterResetFromSocketBuffer', () => {
         it('parses serial number and filterReset value', () => {
             const buf = Buffer.alloc(9);
