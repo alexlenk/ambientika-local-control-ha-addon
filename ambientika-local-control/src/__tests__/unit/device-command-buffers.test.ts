@@ -5,6 +5,7 @@ import { WeatherUpdateDto } from '../../dto/weather-update.dto';
 import { Device } from '../../models/device.model';
 import { OperatingModeDto } from '../../dto/operating-mode.dto';
 import { DeviceSetupDto } from '../../dto/device-setup.dto';
+import { DeviceMapper } from '../../services/device.mapper';
 
 const mockLog = {
     debug: vi.fn(),
@@ -52,68 +53,52 @@ describe('DeviceCommandService — buffer generation (bug regression tests)', ()
         return (service as any).getDeviceSetupBufferData(dto);
     }
 
-    describe('getWeatherUpdateBufferData — Bug 1 & Bug 4 regression', () => {
-        it('BUG 1 REGRESSION: encodes temperature correctly (was always 0 before fix)', () => {
-            const dto: WeatherUpdateDto = { temperature: 23.5, humidity: 60, airQuality: 1 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
+    describe('getWeatherUpdateBufferData (#90)', () => {
+        const dto: WeatherUpdateDto = { temperature: 23.5, humidity: 72, airQuality: 2 };
 
-            // Before fix: weatherUpdateDto.toString() → "[object Object]" → digits stripped → 0
-            // After fix:  weatherUpdateDto.temperature.toString() → "23.5" → "235" → "2350" → 2350
-            const tempValue = buf.readInt16LE(8);
-            expect(tempValue).toBe(2350);
-            expect(tempValue).not.toBe(0);
+        it('matches the cloud frame from the protocol doc byte for byte (17.12 °C, 89 %, AQ 1)', () => {
+            const buf = getWeatherBuffer('aabbccddeeff', { temperature: 17.12, humidity: 89, airQuality: 1 });
+            expect(buf.toString('hex')).toBe('0200aabbccddeeff04b0065901');
         });
 
-        it('encodes zero temperature as 0', () => {
-            const dto: WeatherUpdateDto = { temperature: 0, humidity: 50, airQuality: 0 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
-            expect(buf.readInt16LE(8)).toBe(0);
+        it('keeps the 0x04 command byte at byte 8 (was overwritten by the temperature)', () => {
+            expect(getWeatherBuffer('aabbccddeeff', dto)[8]).toBe(0x04);
         });
 
-        it('encodes positive integer temperature correctly', () => {
-            const dto: WeatherUpdateDto = { temperature: 20, humidity: 50, airQuality: 0 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
-            // "20" → "20" → padEnd(4,'0') → "2000" → 2000
-            expect(buf.readInt16LE(8)).toBe(2000);
+        it.each([
+            [21.5, 2150],
+            [10, 1000],
+            [5, 500],        // was encoded as 5000 (50 °C)
+            [5.5, 550],      // was 5500
+            [0.5, 50],       // was 500
+            [0, 0],
+            [-3.2, -320],    // was -3200
+            [-15, -1500],
+            [17.123, 1712],  // rounded to hundredths
+        ])('encodes %d °C as int16 LE %d at bytes 9-10', (temperature, expected) => {
+            const buf = getWeatherBuffer('aabbccddeeff', { temperature, humidity: 50, airQuality: 1 });
+            expect(buf.readInt16LE(9)).toBe(expected);
         });
 
-        it('encodes negative temperature as negative value', () => {
-            const dto: WeatherUpdateDto = { temperature: -3, humidity: 50, airQuality: 0 };
+        it('puts humidity at byte 11 and airQuality at byte 12', () => {
             const buf = getWeatherBuffer('aabbccddeeff', dto);
-            expect(buf.readInt16LE(8)).toBeLessThan(0);
+            expect(buf[11]).toBe(72);
+            expect(buf[12]).toBe(2);
         });
 
-        it('BUG 4 REGRESSION: serial number bytes are correct (writeUInt8, not writeInt16LE)', () => {
-            const dto: WeatherUpdateDto = { temperature: 23.5, humidity: 60, airQuality: 1 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
-
-            // Serial number should be in bytes 2-7
-            expect(buf[2]).toBe(0xaa);
-            expect(buf[3]).toBe(0xbb);
-            expect(buf[4]).toBe(0xcc);
-            expect(buf[5]).toBe(0xdd);
-            expect(buf[6]).toBe(0xee);
-            expect(buf[7]).toBe(0xff);
-        });
-
-        it('encodes humidity in the correct byte position', () => {
-            const dto: WeatherUpdateDto = { temperature: 23.5, humidity: 72, airQuality: 2 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
-            expect(buf[10]).toBe(72);   // humidity at byte 10
-            expect(buf[11]).toBe(2);    // airQuality at byte 11
-        });
-
-        it('allocates 13-byte buffer', () => {
-            const dto: WeatherUpdateDto = { temperature: 10, humidity: 50, airQuality: 0 };
+        it('writes header and serial number', () => {
             const buf = getWeatherBuffer('aabbccddeeff', dto);
             expect(buf.length).toBe(13);
+            expect(buf.subarray(0, 8).toString('hex')).toBe('0200aabbccddeeff');
         });
 
-        it('starts with 0x02, 0x00 header bytes', () => {
-            const dto: WeatherUpdateDto = { temperature: 10, humidity: 50, airQuality: 0 };
-            const buf = getWeatherBuffer('aabbccddeeff', dto);
-            expect(buf[0]).toBe(0x02);
-            expect(buf[1]).toBe(0x00);
+        it("round-trips through the add-on's own cloud weather frame parser", () => {
+            const parsed = new DeviceMapper(mockLog).deviceWeatherUpdateFromSocketBuffer(
+                getWeatherBuffer('aabbccddeeff', { temperature: -3.2, humidity: 72, airQuality: 2 }));
+            expect(parsed.serialNumber).toBe('aabbccddeeff');
+            expect(parsed.temperature).toBe(-3.2);
+            expect(parsed.humidity).toBe(72);
+            expect(parsed.airQuality).toBe('GOOD');
         });
     });
 
