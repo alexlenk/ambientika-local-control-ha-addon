@@ -269,14 +269,23 @@ export class DeviceCommandService {
         }
     }
 
+    // Slaves ignore the filter reset frame (locally, via the cloud and on the unit itself);
+    // the official app resets the whole zone by sending the frame to the zone master only,
+    // so a reset requested for a slave is forwarded to its master (#88).
     private handleFilterReset(serialNumber: string): void {
-        this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
-            (dto: DeviceDto | undefined) => {
-                if (dto) {
-                    const device = this.deviceMapper.deviceFromDto(dto);
-                    const data = this.getFilterResetBufferData(serialNumber);
-                    this.localSocketDataUpdate(data, device.remoteAddress);
+        this.deviceStorageService.findZoneMaster(serialNumber,
+            (master: DeviceDto | undefined) => {
+                if (!master) {
+                    this.log.warn(`Filter reset for ${serialNumber} not sent: no zone master found. ` +
+                        `Slaves ignore filter reset — reset the master of the zone instead`);
+                    return;
                 }
+                if (master.serialNumber !== serialNumber) {
+                    this.log.info(`Filter reset for slave ${serialNumber} forwarded to zone master ${master.serialNumber}`);
+                }
+                const device = this.deviceMapper.deviceFromDto(master);
+                const data = this.getFilterResetBufferData(master.serialNumber);
+                this.localSocketDataUpdate(data, device.remoteAddress);
             });
     }
 

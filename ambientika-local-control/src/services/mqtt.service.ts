@@ -139,6 +139,7 @@ export class MqttService {
             this.sendDeviceAirQuality(device);
             this.sendHumidityAlarm(device);
             this.sendFilterStatus(device);
+            this.sendZoneFilterStatus(device);
             this.sendNightAlarm(device);
             this.sendLightSensitivity(device);
             
@@ -207,6 +208,11 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
                     device.serialNumber, 'filterstatus');
                 this.publish(topic, filterStatusDiscovery);
+
+                const zoneFilterStatusDiscovery = this.hAAutoDiscoveryService.getZoneFilterStatusSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'zonefilterstatus');
+                this.publish(topic, zoneFilterStatusDiscovery);
 
                 const humidityDiscovery = this.hAAutoDiscoveryService.getHumidityStatusSensorMessage(device);
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
@@ -340,6 +346,17 @@ export class MqttService {
     private sendFilterStatus(device: Device) {
         this.publish(this.getDevicePublishTopic(process.env.FILTER_STATUS_TOPIC, device.serialNumber),
             device.filterStatus.toString())
+    }
+
+    // A slave's own filter flag can't be cleared by any reset path; the zone master's flag
+    // is what the official app shows for the zone, so publish that for every device (#88).
+    private sendZoneFilterStatus(device: Device) {
+        this.deviceStorageService.findZoneMaster(device.serialNumber, (master: DeviceDto | undefined) => {
+            if (master) {
+                this.publish(this.getDevicePublishTopic(process.env.ZONE_FILTER_STATUS_TOPIC, device.serialNumber),
+                    master.filterStatus.toString());
+            }
+        });
     }
 
     private sendNightAlarm(device: Device) {

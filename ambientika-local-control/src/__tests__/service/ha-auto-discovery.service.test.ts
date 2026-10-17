@@ -43,6 +43,7 @@ describe('HAAutoDiscoveryService', () => {
         process.env.CLOUD_AVAILABILITY_TOPIC = 'ambientika/%serialNumber/cloud-availability';
         process.env.CURRENT_AIR_QUALITY_TOPIC = 'ambientika/%serialNumber/air-quality';
         process.env.FILTER_STATUS_TOPIC = 'ambientika/%serialNumber/filter-status';
+        process.env.ZONE_FILTER_STATUS_TOPIC = 'ambientika/%serialNumber/zone-filter-status';
         process.env.FILTER_RESET_TOPIC = 'ambientika/%serialNumber/filter-reset';
         process.env.LIGHT_SENSITIVITY_TOPIC = 'ambientika/%serialNumber/light-sensitivity/state';
         process.env.LIGHT_SENSITIVITY_COMMAND_TOPIC = 'ambientika/%serialNumber/light-sensitivity/set';
@@ -157,6 +158,14 @@ describe('HAAutoDiscoveryService', () => {
         it('filter status: has icon mdi:air-filter', () => {
             const device = makeDevice();
             const msg = JSON.parse(service.getFilterStatusSensorMessage(device));
+            expect(msg.icon).toBe('mdi:air-filter');
+        });
+
+        it('zone filter status: own unique_id and state topic (#88)', () => {
+            const device = makeDevice('aabbccddeeff');
+            const msg = JSON.parse(service.getZoneFilterStatusSensorMessage(device));
+            expect(msg.unique_id).toBe('zone_filter_status_aabbccddeeff');
+            expect(msg.state_topic).toBe('ambientika/aabbccddeeff/zone-filter-status');
             expect(msg.icon).toBe('mdi:air-filter');
         });
 

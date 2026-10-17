@@ -41,6 +41,7 @@ const mockStorage = {
     findExistingDeviceBySerialNumber: vi.fn(),
     findExistingDeviceByRemoteAddress: vi.fn(),
     getDevices: vi.fn(),
+    findZoneMaster: vi.fn(),
     getStoredOperatingMode: vi.fn().mockReturnValue(undefined),
     getStoredFanSpeed: vi.fn().mockReturnValue(undefined),
     hasStoredCommand: vi.fn().mockReturnValue(false),
@@ -1250,6 +1251,46 @@ describe('MqttService', () => {
                 ([topic]: [string]) => topic.includes('/action')
             );
             expect(actionCalls.some(([, msg]: [string, string]) => msg === 'off')).toBe(true);
+        });
+    });
+
+    describe('sendZoneFilterStatus (#88)', () => {
+        beforeEach(() => {
+            process.env.ZONE_FILTER_STATUS_TOPIC = 'ambientika/%serialNumber/zone-filter-status';
+        });
+
+        function zoneFilterCalls(): [string, string][] {
+            return mockMqttClient.publish.mock.calls.filter(
+                ([topic]: [string]) => topic.includes('zone-filter-status')
+            );
+        }
+
+        it("publishes the zone master's filter status on the slave's topic", () => {
+            mockStorage.findZoneMaster.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb({serialNumber: '112233445566', filterStatus: 'GOOD'})
+            );
+            const slave = makeDevice('aabbccddeeff');
+            slave.deviceRole = 'SLAVE_OPPOSITE_MASTER';
+            slave.filterStatus = 'BAD';
+            (service as any).deviceTopicSubscriptions.add(slave.serialNumber);
+
+            eventService.deviceStatusUpdate(slave);
+
+            expect(mockStorage.findZoneMaster).toHaveBeenCalledWith('aabbccddeeff', expect.any(Function));
+            expect(zoneFilterCalls()).toEqual([
+                ['ambientika/aabbccddeeff/zone-filter-status', 'GOOD', expect.any(Function)]
+            ]);
+        });
+
+        it('publishes nothing when the zone master is unknown', () => {
+            mockStorage.findZoneMaster.mockImplementation(
+                (_sn: string, cb: (d: any) => void) => cb(undefined)
+            );
+            (service as any).deviceTopicSubscriptions.add('aabbccddeeff');
+
+            eventService.deviceStatusUpdate(makeDevice('aabbccddeeff'));
+
+            expect(zoneFilterCalls()).toHaveLength(0);
         });
     });
 

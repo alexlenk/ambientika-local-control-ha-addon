@@ -19,6 +19,11 @@ function makeDevice(sn = 'aabbccddeeff'): Device {
         false, 'GOOD', false, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
 }
 
+function makeRoleDevice(sn: string, role: string, filterStatus = 'GOOD'): Device {
+    return new Device(sn, 'AUTO', 'LOW', 'NORMAL', 22, 55, 'GOOD',
+        false, filterStatus, false, role, 'SMART', 'LOW', '192.168.1.1', 80);
+}
+
 function makeAlarmedDevice(sn = 'aabbccddeeff'): Device {
     return new Device(sn, 'AUTO', 'LOW', 'NORMAL', 22, 55, 'GOOD',
         true, 'GOOD', true, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
@@ -242,6 +247,86 @@ describe('DeviceStorageService', () => {
                 expect.stringContaining('Error saving zone/houseId'),
                 expect.any(Error)
             );
+        });
+    });
+
+    describe('findZoneMaster (#88)', () => {
+        const MASTER = '111111111111';
+        const SLAVE = '222222222222';
+        const OTHER_MASTER = '333333333333';
+
+        function find(serialNumber: string): DeviceDto | undefined {
+            const callback = vi.fn();
+            service.findZoneMaster(serialNumber, callback);
+            expect(callback).toHaveBeenCalledTimes(1);
+            return callback.mock.calls[0]![0];
+        }
+
+        it('resolves a master to itself', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            expect(find(MASTER)?.serialNumber).toBe(MASTER);
+        });
+
+        it('resolves a slave to the master with the same zone and houseId', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER', 'BAD'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_OPPOSITE_MASTER'));
+            service.saveDevice(makeRoleDevice(OTHER_MASTER, 'MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 12048);
+            service.saveDeviceZoneHouseId(SLAVE, 1, 12048);
+            service.saveDeviceZoneHouseId(OTHER_MASTER, 0, 12048);
+
+            const master = find(SLAVE);
+            expect(master?.serialNumber).toBe(MASTER);
+            expect(master?.filterStatus).toBe('BAD');
+        });
+
+        it('does not match a master of the same zone index in a different house', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 99999);
+            service.saveDeviceZoneHouseId(SLAVE, 1, 12048);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('matches by zone alone when the slave houseId is unknown and the match is unique', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 2, 12048);
+            service.saveDeviceZoneHouseId(SLAVE, 2, undefined);
+
+            expect(find(SLAVE)?.serialNumber).toBe(MASTER);
+        });
+
+        it('resolves to undefined when more than one master matches', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(OTHER_MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 2, 1);
+            service.saveDeviceZoneHouseId(OTHER_MASTER, 2, 2);
+            service.saveDeviceZoneHouseId(SLAVE, 2, undefined);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('resolves to undefined when the slave zone is unknown', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 12048);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('resolves to undefined for an unknown device', () => {
+            expect(find('ffffffffffff')).toBeUndefined();
+        });
+
+        it('logs an error and does not call back when the query fails', () => {
+            service.close();
+            const callback = vi.fn();
+            service.findZoneMaster(MASTER, callback);
+            expect(callback).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching zone master from db', expect.any(Error));
         });
     });
 

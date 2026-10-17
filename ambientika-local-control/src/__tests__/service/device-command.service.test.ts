@@ -32,6 +32,7 @@ function makeDevice(sn = 'aabbccddeeff'): Device {
 const mockStorage = {
     findExistingDeviceBySerialNumber: vi.fn(),
     findExistingDeviceByRemoteAddress: vi.fn(),
+    findZoneMaster: vi.fn(),
     getDevices: vi.fn(),
 } as any;
 
@@ -335,8 +336,8 @@ describe('DeviceCommandService', () => {
     });
 
     describe('DEVICE_FILTER_RESET command', () => {
-        it('emits LOCAL_SOCKET_DATA_UPDATE when device is found', () => {
-            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+        it('emits LOCAL_SOCKET_DATA_UPDATE when the device is a master', () => {
+            mockStorage.findZoneMaster.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
 
@@ -345,11 +346,12 @@ describe('DeviceCommandService', () => {
 
             eventService.deviceFilterReset('aabbccddeeff');
 
-            expect(listener).toHaveBeenCalled();
+            expect(mockStorage.findZoneMaster).toHaveBeenCalledWith('aabbccddeeff', expect.any(Function));
+            expect(listener).toHaveBeenCalledWith(expect.any(Buffer), '192.168.1.1');
         });
 
-        it('does not emit LOCAL_SOCKET_DATA_UPDATE when device not found', () => {
-            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+        it('does not emit LOCAL_SOCKET_DATA_UPDATE and warns when no zone master is found', () => {
+            mockStorage.findZoneMaster.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(undefined)
             );
 
@@ -359,10 +361,11 @@ describe('DeviceCommandService', () => {
             eventService.deviceFilterReset('aabbccddeeff');
 
             expect(listener).not.toHaveBeenCalled();
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('no zone master found'));
         });
 
         it('sends 9-byte filter reset buffer', () => {
-            mockStorage.findExistingDeviceBySerialNumber.mockImplementation(
+            mockStorage.findZoneMaster.mockImplementation(
                 (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(makeDto())
             );
 
@@ -374,6 +377,26 @@ describe('DeviceCommandService', () => {
             eventService.deviceFilterReset('aabbccddeeff');
 
             expect(capturedData?.length).toBe(9);
+        });
+
+        it('forwards a slave reset to its zone master — slaves ignore the frame (#88)', () => {
+            const master = {...makeDto('112233445566'), remoteAddress: '192.168.1.50'};
+            mockStorage.findZoneMaster.mockImplementation(
+                (_sn: string, cb: (d: DeviceDto | undefined) => void) => cb(master)
+            );
+
+            let capturedData: Buffer | undefined;
+            let capturedAddress: string | undefined;
+            eventService.on(AppEvents.LOCAL_SOCKET_DATA_UPDATE, (data: Buffer, address: string) => {
+                capturedData = data;
+                capturedAddress = address;
+            });
+
+            eventService.deviceFilterReset('aabbccddeeff');
+
+            expect(capturedData?.toString('hex')).toBe('020011223344556603');
+            expect(capturedAddress).toBe('192.168.1.50');
+            expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('forwarded to zone master 112233445566'));
         });
     });
 

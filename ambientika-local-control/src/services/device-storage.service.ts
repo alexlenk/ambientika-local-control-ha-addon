@@ -183,6 +183,40 @@ export class DeviceStorageService {
         }
     }
 
+    // Resolves the master of the zone a device belongs to (a master resolves to itself).
+    // Slaves never clear their own filter flag — the zone master's flag is the one that
+    // counts, and the official app only ever sends the filter reset to the master (#88).
+    // Slaves don't send UDP broadcasts, so their zone/houseId is only known from cloud or
+    // MQTT setup packets; without it, or with more than one candidate master, this
+    // resolves to undefined rather than guessing.
+    findZoneMaster(serialNumber: string, callback: (master: DeviceDto | undefined) => void): void {
+        let master: DeviceDto | undefined;
+        try {
+            const device = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
+            if (device?.deviceRole === 'MASTER') {
+                master = device;
+            } else if (device && device.zone !== undefined && device.zone !== null) {
+                const hasHouseId = device.houseId !== undefined && device.houseId !== null;
+                const candidates = (hasHouseId
+                    ? this.db.prepare("SELECT * FROM devices WHERE deviceRole = 'MASTER' AND zone = ? AND houseId = ? AND serialNumber != ?")
+                        .all(device.zone, device.houseId as number, serialNumber)
+                    : this.db.prepare("SELECT * FROM devices WHERE deviceRole = 'MASTER' AND zone = ? AND serialNumber != ?")
+                        .all(device.zone, serialNumber)) as unknown as DeviceDto[];
+                if (candidates.length === 1) {
+                    master = candidates[0];
+                } else {
+                    this.log.debug(`Found ${candidates.length} candidate zone masters for ${serialNumber} (zone=${device.zone}, houseId=${device.houseId})`);
+                }
+            } else if (device) {
+                this.log.debug(`Zone of ${serialNumber} is unknown, cannot resolve its zone master`);
+            }
+        } catch (error) {
+            this.log.error('Error fetching zone master from db', error);
+            return;
+        }
+        callback(master);
+    }
+
     findExistingDeviceByRemoteAddress(remoteAddress: string,
                                       callback: (device: (DeviceDto | undefined)) => void): void {
         try {

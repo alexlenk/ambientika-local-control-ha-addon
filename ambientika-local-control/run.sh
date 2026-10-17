@@ -114,6 +114,7 @@ TARGET_HUMIDITY_COMMAND_TOPIC=ambientika/%serialNumber/target_humidity/set
 CURRENT_AIR_QUALITY_TOPIC=ambientika/%serialNumber/air_quality
 HUMIDITY_ALARM_TOPIC=ambientika/%serialNumber/humidity_alarm
 FILTER_STATUS_TOPIC=ambientika/%serialNumber/filter_status
+ZONE_FILTER_STATUS_TOPIC=ambientika/%serialNumber/zone_filter_status
 FILTER_RESET_TOPIC=ambientika/%serialNumber/filter_reset
 FAN_STATUS_TOPIC=ambientika/%serialNumber/fan_status
 FAN_MODE_TOPIC=ambientika/%serialNumber/fan_mode

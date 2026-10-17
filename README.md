@@ -135,6 +135,13 @@ For cloud API and provisioning architecture see [`CLOUD-INTEGRATION.md`](CLOUD-I
 
 > Commands must always be sent to the MASTER device.
 
+#### Filter status and reset
+
+The filter flag that counts is the zone master's: slaves never clear their own flag, whether reset locally, from the official app, or on the unit itself. The official app resets a whole zone by sending the filter reset frame (`02 00 <MAC> 03`) to the master only. Accordingly:
+
+- Pressing `filter_reset` on a slave sends the reset to its zone master (same zone and house ID). If the add-on doesn't know the slave's zone yet (it's learned from cloud or MQTT setup packets), nothing is sent and a warning is logged.
+- Every device has a `zone_filter_status` sensor showing its zone master's filter status. A slave's own `filter_status` keeps reporting its raw (uncleared) flag.
+
 ### Device Status Packet (21 bytes, TCP)
 
 | Byte(s) | Content |
