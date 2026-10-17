@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.3.0 - Zone-level filter reset and status for slaves, cloud host fix
+
+#### Added
+- **Zone filter status sensor**: every device now has a `zone_filter_status` sensor that shows the filter status of its zone master. Slave units never clear their own filter flag (not from a local reset, the official app, or on the unit itself), and the official app treats the master's flag as the filter state of the whole zone. A slave's own `filter_status` keeps reporting its raw flag. (#88)
+- **Cloud command logging**: every command the Ambientika cloud sends to a device is now logged at `info` level with its type (e.g. `Cloud command → device …50e0: FILTER_RESET`), so cloud/app actions are visible without `silly` logging. (#88)
+
+#### Changed
+- **Filter reset on slaves goes to the zone master**: pressing `filter_reset` on a slave now sends the reset to the master of its zone (same zone and house ID), which is what the official app does. If the slave's zone isn't known yet (it's learned from cloud or MQTT setup packets), nothing is sent and a warning is logged. Previously the reset was sent to the slave itself, which silently ignores it. (#88)
+- The unidentified 8-byte `04 00 <MAC>` packet that masters send every few seconds is now logged at `debug` instead of `warn`. (#88)
+
+#### Fixed
+- **Cloud sync timing out / `cloud_availability` flapping**: `run.sh` still fell back to the old cloud IP `185.214.203.87`, which no longer answers, when `cloud_host` was empty or missing. It now falls back to `app.ambientika.eu`. Installs set up before the default was changed to the hostname (#37) may still carry that old IP as their saved `cloud_host` option; the add-on now logs a warning at startup if so — change it to `app.ambientika.eu` in the add-on configuration. (#98)
+
+---
+
 ### Version 1.2.2 - Support 22-byte status packet (radio/micro firmware 1.1.13+)
 
 #### Fixed
