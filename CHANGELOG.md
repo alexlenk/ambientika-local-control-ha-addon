@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-### Version 1.3.0 - Zone-level filter reset and status for slaves, cloud host fix
+### Version 1.3.0 - Zone filter reset for slaves; fix target humidity, weather updates and cloud host
 
 #### Added
 - **Zone filter status sensor**: every device now has a `zone_filter_status` sensor that shows the filter status of its zone master. Slave units never clear their own filter flag (not from a local reset, the official app, or on the unit itself), and the official app treats the master's flag as the filter state of the whole zone. A slave's own `filter_status` keeps reporting its raw flag. (#88)
@@ -12,7 +12,13 @@ All notable changes to this project will be documented in this file.
 - **Filter reset on slaves goes to the zone master**: pressing `filter_reset` on a slave now sends the reset to the master of its zone (same zone and house ID), which is what the official app does. If the slave's zone isn't known yet (it's learned from cloud or MQTT setup packets), nothing is sent and a warning is logged. Previously the reset was sent to the slave itself, which silently ignores it. (#88)
 - The unidentified 8-byte `04 00 <MAC>` packet that masters send every few seconds is now logged at `debug` instead of `warn`. (#88)
 
+- **HA keeps showing a just-sent command for up to 30 s, then the device's real state**: the add-on publishes the last commanded mode/fan speed so HA doesn't jump back to the old value while the device applies it. That override used to stay until the device reported exactly the commanded value, so a rejected command, or `fan_only` (shown as preset `12`), stuck in HA indefinitely. It now expires after 30 s, `fan_only` is shown as the mode it actually resolves to, and fan speed and mode sent as separate messages no longer overwrite each other. (#91)
+- **MQTT commands are validated like REST ones**: an unknown preset/mode (previously sent to the unit as SMART), light sensitivity, non-numeric target humidity, out-of-range weather values, or setup role/zone/house ID are now ignored with a log message instead of producing a wrong command. Errors in internal lookups are no longer misreported as `Error fetching device from db`. (#93)
+
 #### Fixed
+- **Target humidity from Home Assistant always set the unit to DRY**: the humidity slider's level was passed on as `"1"`/`"2"` instead of `NORMAL`/`MOIST`, which ended up as `0` on the wire. The REST API was not affected. (#89)
+- **Weather updates were sent in the wrong format**: the `0x04` command byte was overwritten by the temperature, humidity and air quality were shifted by one byte, and temperatures without exactly two integer digits were off by 10× (5 °C was sent as 50 °C, -3.2 °C as -32 °C). The frame now matches the cloud's own weather frames byte for byte. SMART-mode weather updates via REST or MQTT should now actually reach the units. (#90)
+- **MQTT weather updates stopped as soon as any device went offline**: the shared weather topic was unsubscribed together with that device's topics. It is now subscribed once per MQTT connection. (#92)
 - **Cloud sync timing out / `cloud_availability` flapping**: `run.sh` still fell back to the old cloud IP `185.214.203.87`, which no longer answers, when `cloud_host` was empty or missing. It now falls back to `app.ambientika.eu`. Installs set up before the default was changed to the hostname (#37) may still carry that old IP as their saved `cloud_host` option; the add-on now logs a warning at startup if so — change it to `app.ambientika.eu` in the add-on configuration. (#98)
 
 ---
