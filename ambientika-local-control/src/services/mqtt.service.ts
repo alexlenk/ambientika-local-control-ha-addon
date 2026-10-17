@@ -826,14 +826,16 @@ export class MqttService {
         return undefined;
     }
 
+    // Returns the enum *name* — the command builder looks levels up by name, and the numeric
+    // string ("1") it used to get resolved to DRY on the wire (#89).
     private getHumidityLevel(humidityLevel: string): string {
         const humidityLevelNumber = parseInt(humidityLevel);
         if (humidityLevelNumber <= 40) {
-            return HumidityLevel.DRY.toString()
+            return HumidityLevel[HumidityLevel.DRY];
         } else if (humidityLevelNumber > 40 && humidityLevelNumber <= 60) {
-            return HumidityLevel.NORMAL.toString()
+            return HumidityLevel[HumidityLevel.NORMAL];
         } else {
-            return HumidityLevel.MOIST.toString()
+            return HumidityLevel[HumidityLevel.MOIST];
         }
     }
 

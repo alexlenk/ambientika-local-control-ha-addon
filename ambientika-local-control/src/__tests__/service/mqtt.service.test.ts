@@ -177,15 +177,15 @@ describe('MqttService', () => {
 
     describe('getHumidityLevel', () => {
         it('returns DRY for humidity <= 40', () => {
-            expect((service as any).getHumidityLevel('40')).toBe('0'); // HumidityLevel.DRY = 0
+            expect((service as any).getHumidityLevel('40')).toBe('DRY');
         });
 
         it('returns NORMAL for humidity between 41-60', () => {
-            expect((service as any).getHumidityLevel('60')).toBe('1'); // HumidityLevel.NORMAL = 1
+            expect((service as any).getHumidityLevel('60')).toBe('NORMAL');
         });
 
         it('returns MOIST for humidity > 60', () => {
-            expect((service as any).getHumidityLevel('75')).toBe('2'); // HumidityLevel.MOIST = 2
+            expect((service as any).getHumidityLevel('75')).toBe('MOIST');
         });
     });
 

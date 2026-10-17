@@ -6,6 +6,7 @@ import { Device } from '../../models/device.model';
 import { OperatingModeDto } from '../../dto/operating-mode.dto';
 import { DeviceSetupDto } from '../../dto/device-setup.dto';
 import { DeviceMapper } from '../../services/device.mapper';
+import { MqttService } from '../../services/mqtt.service';
 
 const mockLog = {
     debug: vi.fn(),
@@ -52,6 +53,19 @@ describe('DeviceCommandService — buffer generation (bug regression tests)', ()
     function getSetupBuffer(dto: DeviceSetupDto): Buffer {
         return (service as any).getDeviceSetupBufferData(dto);
     }
+
+    describe('humidity level from the HA target-humidity slider (#89)', () => {
+        it.each([
+            ['40', 0],
+            ['60', 1],
+            ['75', 2],
+        ])('slider %s %% is encoded as humidity level %d at byte 11', (slider, expected) => {
+            const mqtt = { getHumidityLevel: (MqttService.prototype as any).getHumidityLevel };
+            const humidityLevel = mqtt.getHumidityLevel(slider);
+            const buf = (service as any).getUpdateBufferData({ humidityLevel } as OperatingModeDto, makeDevice());
+            expect(buf[11]).toBe(expected);
+        });
+    });
 
     describe('getWeatherUpdateBufferData (#90)', () => {
         const dto: WeatherUpdateDto = { temperature: 23.5, humidity: 72, airQuality: 2 };
