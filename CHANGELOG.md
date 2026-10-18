@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Version 1.2.2 - Support 22-byte status packet (radio/micro firmware 1.1.13+)
+
+#### Fixed
+- **Local socket / device mapper**: devices on newer radio/micro firmware (observed on `1.1.13`) send a 22-byte status packet instead of 21 bytes — identical layout through byte 20, plus one unidentified trailing byte that isn't parsed. These packets were previously dropped entirely (only a `warn` log, never reaching the DB or MQTT), so affected devices connected successfully but never produced any entities or discovery topics. The add-on now accepts 22-byte status packets alongside the existing 19- and 21-byte variants. Diagnosed and confirmed via real device captures and a live command/response test contributed by @klecksi in #72 — thank you! On this firmware, a standalone master with no paired slave reports `deviceRole` as `0xFF`, which isn't a documented value and falls back to `MASTER` (correct in that case, but unconfirmed against a paired master+slave setup — see #72 for follow-up). (#72)
+
+---
+
 ### Version 1.2.1 - Coalesce near-simultaneous MQTT commands to avoid double device beep
 
 #### Fixed

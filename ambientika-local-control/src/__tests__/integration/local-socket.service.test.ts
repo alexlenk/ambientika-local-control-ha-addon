@@ -91,6 +91,21 @@ function make19ByteBuffer(sn = 'aabbccddeeff'): Buffer {
     return buf;
 }
 
+// Build a valid 22-byte status buffer (firmware 1.1.13+, #72) — same layout as the 21-byte
+// format plus one unidentified trailing byte, which the parser ignores.
+function make22ByteBuffer(sn = 'aabbccddeeff'): Buffer {
+    const buf = Buffer.alloc(22);
+    const octets = sn.match(/.{2}/g) || [];
+    for (let i = 0; i < 6; i++) {
+        buf[2 + i] = parseInt(octets[i] || '00', 16);
+    }
+    buf[8] = 1;  // OperatingMode.AUTO
+    buf[9] = 0;  // FanSpeed.LOW
+    buf[20] = 80; // signalStrength
+    buf[21] = 1;  // unidentified trailing byte
+    return buf;
+}
+
 describe('LocalSocketService', () => {
     let service: LocalSocketService;
     let eventService: EventService;
@@ -212,9 +227,9 @@ describe('LocalSocketService', () => {
         });
 
         it('unknown packet size: logs a warning so it is visible without silly logging (regression for #29)', () => {
-            socketHandlers['data']?.(Buffer.alloc(22));
+            socketHandlers['data']?.(Buffer.alloc(20));
 
-            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('22-byte'));
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('20-byte'));
         });
 
         it('18-byte data: does NOT log an unrecognized-length warning', () => {
@@ -247,6 +262,28 @@ describe('LocalSocketService', () => {
 
         it('19-byte data: does NOT log an unrecognized-length warning', () => {
             socketHandlers['data']?.(make19ByteBuffer());
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+        });
+
+        it('22-byte data: emits deviceStatusUpdate event (firmware 1.1.13+, #72)', () => {
+            const listener = vi.fn();
+            eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, listener);
+
+            socketHandlers['data']?.(make22ByteBuffer());
+
+            expect(listener).toHaveBeenCalled();
+        });
+
+        it('22-byte data: maps serial number to connection key', () => {
+            socketHandlers['data']?.(make22ByteBuffer('aabbccddeeff'));
+
+            const deviceConnections = (service as any).deviceConnections;
+            expect(deviceConnections.has('aabbccddeeff')).toBe(true);
+        });
+
+        it('22-byte data: does NOT log an unrecognized-length warning', () => {
+            socketHandlers['data']?.(make22ByteBuffer());
 
             expect(mockLog.warn).not.toHaveBeenCalled();
         });

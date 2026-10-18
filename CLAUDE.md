@@ -85,6 +85,7 @@ SchedulerService            — marks stale devices offline every minute
 
 Devices speak a binary TCP protocol. Key packet sizes:
 - **21 bytes** — device status (parsed by `DeviceMapper.deviceFromSocketBuffer`)
+- **22 bytes** — newer device status (radio/micro firmware 1.1.13+, #72): identical 21-byte layout plus one unidentified trailing byte, which is not parsed. On this firmware, a standalone master with no paired slave reports `deviceRole` as `0xFF`, which isn't in the `DeviceRole` enum and falls back to `MASTER` (correct in that case, but unconfirmed against a paired master+slave setup)
 - **19 bytes** — legacy device status (radio/micro firmware 0.0.11, #36): same layout through byte 18, missing `lightSensitivity`/`signalStrength` (defaulted to `NOT_AVAILABLE`/`0`)
 - **18 bytes** — device info / firmware versions
 - **16 bytes** — device setup: `02 00 <MAC 6b> 00 <role> <zone> 00 <houseId 4b LE>` (bytes 8 and 11 are fixed `00`)
