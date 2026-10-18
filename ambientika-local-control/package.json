@@ -26,14 +26,14 @@
   "dependencies": {
     "@js-joda/core": "^6.1.0",
     "dotenv": "^17.4.2",
-    "express": "^4.21.0",
+    "express": "^5.2.1",
     "mqtt": "^5.10.1",
     "node-schedule": "^2.1.1",
     "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.10.0",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
     "@types/node-schedule": "^2.1.7",
     "@types/supertest": "^6.0.0",
