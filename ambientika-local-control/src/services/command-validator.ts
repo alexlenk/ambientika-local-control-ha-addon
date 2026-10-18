@@ -19,7 +19,10 @@ export function isValidEnumKey<T extends Record<string, string | number>>(enumOb
 
 // LAST is an internal sentinel (resolved to the device's last mode), not a mode a caller
 // may name; HA's fan_only is mapped to it by MqttService itself.
-export function validateOperatingMode(dto: OperatingModeDto, allowLast = false): string | undefined {
+export function validateOperatingMode(dto: OperatingModeDto | undefined | null, allowLast = false): string | undefined {
+    if (typeof dto !== 'object' || dto === null) {
+        return 'Invalid command: expected an object';
+    }
     if (dto.operatingMode !== undefined && !(allowLast && dto.operatingMode === OperatingMode.LAST.toString())
         && !isValidEnumKey(OperatingMode, dto.operatingMode, ['LAST'])) {
         return `Invalid operatingMode: ${dto.operatingMode}`;

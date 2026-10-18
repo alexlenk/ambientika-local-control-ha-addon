@@ -123,6 +123,11 @@ export class RestService {
                 return;
             }
             const serialNumber = request.params.serialNumber as string;
+            // Express 5 leaves request.body undefined when no JSON body was sent.
+            if (typeof request.body !== 'object' || request.body === null) {
+                response.status(400).send('Invalid request body: expected a JSON object');
+                return;
+            }
             const { role = 0, zone = 0, houseId = 0 } = request.body;
             if (!Number.isInteger(role) || DeviceRole[role] === undefined) {
                 response.status(400).send(`Invalid role: ${role}`);

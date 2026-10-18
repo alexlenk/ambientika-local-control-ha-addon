@@ -205,6 +205,15 @@ describe('RestService', () => {
             expect(res.send).toHaveBeenCalled();
         });
 
+        it('rejects a request without a JSON body with 400 (Express 5 leaves body undefined)', () => {
+            const emitSpy = vi.spyOn(eventService, 'deviceOperatingModeUpdate');
+            const res = makeRes();
+            dispatch('POST:/device/operating-mode/:serialNumber', { params: { serialNumber: 'aabbccddeeff' }, body: undefined }, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(emitSpy).not.toHaveBeenCalled();
+        });
+
         it('rejects an invalid operatingMode with 400', () => {
             const emitSpy = vi.spyOn(eventService, 'deviceOperatingModeUpdate');
             const res = makeRes();
@@ -276,6 +285,15 @@ describe('RestService', () => {
 
             expect(emitSpy).toHaveBeenCalledWith(weatherDto);
             expect(res.send).toHaveBeenCalled();
+        });
+
+        it('rejects a request without a JSON body with 400', () => {
+            const emitSpy = vi.spyOn(eventService, 'deviceWeatherUpdate');
+            const res = makeRes();
+            dispatch('POST:/device/weather-update', { params: {}, body: undefined }, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(emitSpy).not.toHaveBeenCalled();
         });
 
         it('rejects an out-of-range temperature with 400', () => {
@@ -360,6 +378,15 @@ describe('RestService', () => {
                 Object.keys(middlewaresAtRegistration).forEach(k => delete middlewaresAtRegistration[k]);
                 middlewares.length = 0;
                 new RestService(mockLog, mockStorage, eventService);
+            });
+
+            it('rejects a request without a JSON body with 400 instead of defaulting role/zone/houseId', () => {
+                const res = makeRes();
+                dispatch('POST:/cloud/send-setup/:serialNumber',
+                    { params: { serialNumber: 'aabbccddeeff' }, body: undefined }, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(mockStorage.findExistingDeviceBySerialNumber).not.toHaveBeenCalled();
             });
 
             it('returns 404 when the device is not found', () => {

@@ -21,6 +21,11 @@ describe('command-validator (#93)', () => {
             expect(validateOperatingMode({})).toBeUndefined();
         });
 
+        it('rejects a missing body (Express 5 leaves request.body undefined)', () => {
+            expect(validateOperatingMode(undefined)).toBe('Invalid command: expected an object');
+            expect(validateOperatingMode(null)).toBe('Invalid command: expected an object');
+        });
+
         it('rejects LAST by name, and by its numeric sentinel unless allowed', () => {
             expect(validateOperatingMode({ operatingMode: 'LAST' })).toBe('Invalid operatingMode: LAST');
             expect(validateOperatingMode({ operatingMode: '12' })).toBe('Invalid operatingMode: 12');
