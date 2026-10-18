@@ -8,6 +8,7 @@ import {Instant} from '@js-joda/core';
 import {DeviceDto} from '../dto/device.dto';
 import {DeviceMapper} from './device.mapper';
 import {OperatingModeDto} from '../dto/operating-mode.dto';
+import {OperatingMode} from '../models/enum/operating-mode.enum';
 
 dotenv.config()
 
@@ -15,7 +16,12 @@ export class DeviceStorageService {
 
     private db: DatabaseSync;
     private deviceMapper: DeviceMapper;
-    private lastSentCommands: Map<string, OperatingModeDto> = new Map();
+    // Last commanded mode/fan speed per device, published to HA instead of the device-reported
+    // value so the UI doesn't jump back to the old value while the device is still applying the
+    // command. It expires so a command the device rejects or never echoes back (e.g. SMART,
+    // which the device reports as its free-cooling sub-mode) can't pin HA's state forever (#91).
+    private static readonly COMMAND_OVERRIDE_TTL_MS = 30000;
+    private lastSentCommands: Map<string, { command: OperatingModeDto, storedAt: number }> = new Map();
 
     constructor(private log: Logger, private eventService: EventService) {
         this.deviceMapper = new DeviceMapper(this.log);
@@ -79,8 +85,7 @@ export class DeviceStorageService {
         this.eventService.on(AppEvents.DEVICE_STATUS_UPDATE_RECEIVED, (device: Device) => {
             this.log.silly(`Storage service local data update received: `, device);
 
-            // Check if we have a pending command for this device - FOR DEBUGGING ONLY
-            const lastCommand = this.lastSentCommands.get(device.serialNumber);
+            const lastCommand = this.getActiveCommand(device.serialNumber);
             if (lastCommand) {
                 // Check if device applied the command
                 let commandApplied = true;
@@ -101,34 +106,61 @@ export class DeviceStorageService {
                 } else {
                     this.log.debug(`Device ${device.serialNumber} command still pending: ${JSON.stringify(lastCommand)}`);
                 }
-
-                // DO NOT OVERRIDE DEVICE STATE - ALWAYS SHOW REALITY
             }
 
             this.saveDevice(device);
         });
 
         this.eventService.on(AppEvents.DEVICE_OPERATING_MODE_UPDATE, (opMode: OperatingModeDto, serialNumber: string) => {
-            this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(opMode)}`);
-            this.lastSentCommands.set(serialNumber, opMode);
-
-            // Commands will be applied via override logic when real device status updates arrive
-            // No need to trigger fake device status updates here
+            const command = {...opMode};
+            // HA's fan_only arrives as the internal LAST sentinel, which the device never
+            // reports back; store the mode it resolves to instead (#91).
+            if (command.operatingMode === OperatingMode.LAST.toString()) {
+                let lastOperatingMode: string | undefined;
+                try {
+                    const existing = this.db.prepare('SELECT lastOperatingMode FROM devices WHERE serialNumber = ?')
+                        .get(serialNumber) as { lastOperatingMode?: string } | undefined;
+                    lastOperatingMode = existing?.lastOperatingMode;
+                } catch (error) {
+                    this.log.error('Error fetching device from db', error);
+                }
+                if (lastOperatingMode) {
+                    command.operatingMode = lastOperatingMode;
+                } else {
+                    delete command.operatingMode;
+                }
+            }
+            // HA sends each changed attribute as a separate message, so merge rather than
+            // replace — otherwise a mode change drops the fan speed sent just before it.
+            const merged = {...this.getActiveCommand(serialNumber), ...command};
+            this.log.debug(`Command stored for persistence: ${serialNumber} → ${JSON.stringify(merged)}`);
+            this.lastSentCommands.set(serialNumber, {command: merged, storedAt: Date.now()});
         });
     }
 
+    private getActiveCommand(serialNumber: string): OperatingModeDto | undefined {
+        const entry = this.lastSentCommands.get(serialNumber);
+        if (!entry) {
+            return undefined;
+        }
+        if (Date.now() - entry.storedAt > DeviceStorageService.COMMAND_OVERRIDE_TTL_MS) {
+            this.log.debug(`Command override for ${serialNumber} expired, showing device-reported state: ${JSON.stringify(entry.command)}`);
+            this.lastSentCommands.delete(serialNumber);
+            return undefined;
+        }
+        return entry.command;
+    }
+
     hasStoredCommand(serialNumber: string): boolean {
-        return this.lastSentCommands.has(serialNumber);
+        return this.getActiveCommand(serialNumber) !== undefined;
     }
 
     getStoredOperatingMode(serialNumber: string): string | undefined {
-        const command = this.lastSentCommands.get(serialNumber);
-        return command?.operatingMode;
+        return this.getActiveCommand(serialNumber)?.operatingMode;
     }
 
     getStoredFanSpeed(serialNumber: string): string | undefined {
-        const command = this.lastSentCommands.get(serialNumber);
-        return command?.fanSpeed;
+        return this.getActiveCommand(serialNumber)?.fanSpeed;
     }
 
     saveDeviceZoneHouseId(serialNumber: string, zone: number | undefined, houseId: number | undefined): void {
@@ -155,12 +187,14 @@ export class DeviceStorageService {
     }
 
     getDevices(callback: (device: DeviceDto[]) => void): void {
+        let rows: DeviceDto[];
         try {
-            const rows = this.db.prepare('SELECT * FROM devices').all() as unknown as DeviceDto[];
-            callback(rows);
+            rows = this.db.prepare('SELECT * FROM devices').all() as unknown as DeviceDto[];
         } catch (error) {
             this.log.error('Error fetching devices from db', error);
+            return;
         }
+        this.runCallback(() => callback(rows));
     }
 
     deleteDevice(dto: DeviceDto): void {
@@ -175,21 +209,71 @@ export class DeviceStorageService {
     }
 
     findExistingDeviceBySerialNumber(serialNumber: string, callback: (device: (DeviceDto | undefined)) => void): void {
+        let row: DeviceDto | undefined;
         try {
-            const row = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
-            callback(row);
+            row = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
         } catch (error) {
             this.log.error('Error fetching device from db', error);
+            return;
         }
+        this.runCallback(() => callback(row));
+    }
+
+    // Resolves the master of the zone a device belongs to (a master resolves to itself).
+    // Slaves never clear their own filter flag — the zone master's flag is the one that
+    // counts, and the official app only ever sends the filter reset to the master (#88).
+    // Slaves don't send UDP broadcasts, so their zone/houseId is only known from cloud or
+    // MQTT setup packets; without it, or with more than one candidate master, this
+    // resolves to undefined rather than guessing.
+    findZoneMaster(serialNumber: string, callback: (master: DeviceDto | undefined) => void): void {
+        let master: DeviceDto | undefined;
+        try {
+            const device = this.db.prepare('SELECT * FROM devices WHERE serialNumber = ?').get(serialNumber) as DeviceDto | undefined;
+            if (device?.deviceRole === 'MASTER') {
+                master = device;
+            } else if (device && device.zone !== undefined && device.zone !== null) {
+                const hasHouseId = device.houseId !== undefined && device.houseId !== null;
+                const candidates = (hasHouseId
+                    ? this.db.prepare("SELECT * FROM devices WHERE deviceRole = 'MASTER' AND zone = ? AND houseId = ? AND serialNumber != ?")
+                        .all(device.zone, device.houseId as number, serialNumber)
+                    : this.db.prepare("SELECT * FROM devices WHERE deviceRole = 'MASTER' AND zone = ? AND serialNumber != ?")
+                        .all(device.zone, serialNumber)) as unknown as DeviceDto[];
+                if (candidates.length === 1) {
+                    master = candidates[0];
+                } else {
+                    this.log.debug(`Found ${candidates.length} candidate zone masters for ${serialNumber} (zone=${device.zone}, houseId=${device.houseId})`);
+                }
+            } else if (device) {
+                this.log.debug(`Zone of ${serialNumber} is unknown, cannot resolve its zone master`);
+            }
+        } catch (error) {
+            this.log.error('Error fetching zone master from db', error);
+            return;
+        }
+        this.runCallback(() => callback(master));
     }
 
     findExistingDeviceByRemoteAddress(remoteAddress: string,
                                       callback: (device: (DeviceDto | undefined)) => void): void {
+        let row: DeviceDto | undefined;
         try {
-            const row = this.db.prepare('SELECT * FROM devices WHERE remoteAddress = ?').get(remoteAddress) as DeviceDto | undefined;
-            callback(row);
+            row = this.db.prepare('SELECT * FROM devices WHERE remoteAddress = ?').get(remoteAddress) as DeviceDto | undefined;
         } catch (error) {
             this.log.error('Error fetching device from db', error);
+            return;
+        }
+        this.runCallback(() => callback(row));
+    }
+
+    // Callbacks run outside the query's try/catch so a bug in the caller isn't reported as a
+    // DB error (it used to surface as "Error fetching device from db", see #93), but are still
+    // caught: these callbacks run inside event handlers, and an uncaught exception there shuts
+    // the whole add-on down.
+    private runCallback(callback: () => void): void {
+        try {
+            callback();
+        } catch (error) {
+            this.log.error('Error while handling device lookup result', error);
         }
     }
 

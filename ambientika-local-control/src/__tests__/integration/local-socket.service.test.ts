@@ -232,6 +232,20 @@ describe('LocalSocketService', () => {
             expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('20-byte'));
         });
 
+        it('8-byte 04-type packet from masters: logs at debug, not warn (#88)', () => {
+            const buf = Buffer.from('0400aabbccddeeff', 'hex');
+            socketHandlers['data']?.(buf);
+
+            expect(mockLog.warn).not.toHaveBeenCalled();
+            expect(mockLog.debug).toHaveBeenCalledWith(expect.stringContaining('0400aabbccddeeff'));
+        });
+
+        it('8-byte packet of another type: still logs an unrecognized-length warning', () => {
+            socketHandlers['data']?.(Buffer.from('0500aabbccddeeff', 'hex'));
+
+            expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('8-byte'));
+        });
+
         it('18-byte data: does NOT log an unrecognized-length warning', () => {
             socketHandlers['data']?.(make18ByteBuffer());
 
@@ -460,6 +474,14 @@ describe('LocalSocketService', () => {
             cloudSocketHandlers['data']?.(commandBuf);
 
             expect(mockSocket.write).toHaveBeenCalledWith(commandBuf);
+        });
+
+        it('logs the cloud command at info level with its command name (#88)', () => {
+            const resetBuf = Buffer.from('0200aabbccddeeff03', 'hex');
+
+            cloudSocketHandlers['data']?.(resetBuf);
+
+            expect(mockLog.info).toHaveBeenCalledWith('Cloud command → device aabbccddeeff: FILTER_RESET');
         });
 
         it('does NOT emit DEVICE_STATUS_UPDATE_RECEIVED for cloud echo', () => {

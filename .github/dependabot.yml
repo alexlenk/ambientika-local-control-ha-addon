@@ -4,6 +4,10 @@ updates:
     directory: "/ambientika-local-control"
     schedule:
       interval: "weekly"
+    ignore:
+      # typescript-eslint only supports TypeScript <6.1 (#77); lift once it supports newer.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -14,3 +18,8 @@ updates:
     directory: "/ambientika-local-control"
     schedule:
       interval: "weekly"
+    ignore:
+      # Node majors are moved deliberately, to the next LTS line; odd majors never become
+      # LTS (node 25 was already end-of-life when it was proposed, #73).
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

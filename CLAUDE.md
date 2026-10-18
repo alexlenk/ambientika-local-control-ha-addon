@@ -102,7 +102,7 @@ Byte layout and enum values are documented in `src/models/enum/` JSDoc and in th
 - `DeviceRole` — MASTER=0, SLAVE_EQUAL_MASTER=1, SLAVE_OPPOSITE_MASTER=2. **Commands always go to MASTER only.**
 - `HumidityLevel` — DRY=0 (40%), NORMAL=1 (60%), MOIST=2 (75%).
 - `AirQuality` — 5 levels: VERY_GOOD, GOOD, MEDIUM, POOR, BAD (byte 13 of status packet).
-- `FilterStatus` — GOOD or CLOGGED (byte 15 of status packet; byte 14 is the `humidityAlarm` boolean).
+- `FilterStatus` — GOOD=0, MEDIUM=1, BAD=2 (byte 15 of status packet; byte 14 is the `humidityAlarm` boolean). Only the zone master's flag can be reset; slaves never clear theirs (#88), so `zone_filter_status` mirrors the master's.
 - `LightSensitivity` — NOT_AVAILABLE, OFF, LOW, MEDIUM (byte 19 of status packet).
 
 Full 21-byte status packet field-to-byte mapping (`device.mapper.ts`'s `deviceFromSocketBuffer`): 2-7 MAC/serial, 8 operatingMode, 9 fanSpeed, 10 humidityLevel, 11 temperature, 12 humidity, 13 airQuality, 14 humidityAlarm, 15 filterStatus, 16 nightAlarm, 17 deviceRole, 18 lastOperatingMode, 19 lightSensitivity, 20 signalStrength.

@@ -269,14 +269,23 @@ export class DeviceCommandService {
         }
     }
 
+    // Slaves ignore the filter reset frame (locally, via the cloud and on the unit itself);
+    // the official app resets the whole zone by sending the frame to the zone master only,
+    // so a reset requested for a slave is forwarded to its master (#88).
     private handleFilterReset(serialNumber: string): void {
-        this.deviceStorageService.findExistingDeviceBySerialNumber(serialNumber,
-            (dto: DeviceDto | undefined) => {
-                if (dto) {
-                    const device = this.deviceMapper.deviceFromDto(dto);
-                    const data = this.getFilterResetBufferData(serialNumber);
-                    this.localSocketDataUpdate(data, device.remoteAddress);
+        this.deviceStorageService.findZoneMaster(serialNumber,
+            (master: DeviceDto | undefined) => {
+                if (!master) {
+                    this.log.warn(`Filter reset for ${serialNumber} not sent: no zone master found. ` +
+                        `Slaves ignore filter reset — reset the master of the zone instead`);
+                    return;
                 }
+                if (master.serialNumber !== serialNumber) {
+                    this.log.info(`Filter reset for slave ${serialNumber} forwarded to zone master ${master.serialNumber}`);
+                }
+                const device = this.deviceMapper.deviceFromDto(master);
+                const data = this.getFilterResetBufferData(master.serialNumber);
+                this.localSocketDataUpdate(data, device.remoteAddress);
             });
     }
 
@@ -310,37 +319,18 @@ export class DeviceCommandService {
             });
     }
 
+    // 13-byte frame: 02 00 <MAC 6b> 04 <temperature int16 LE, hundredths of °C> <humidity %>
+    // <airQuality, raw 1-based>. Matches the cloud's own weather frames (sragas protocol doc:
+    // `b0 06` = 17.12 °C) and deviceWeatherUpdateFromSocketBuffer, which parses them (#90).
     private getWeatherUpdateBufferData(serialNumber: string, weatherUpdateDto: WeatherUpdateDto): Buffer {
         const buffer = Buffer.alloc(13);
-        buffer.writeInt8(0x02);
-        buffer.writeInt8(0x00, 1);
-        const serialNumberChars = serialNumber.match(/.{2}/g);
-        let offset = 2;
-        if (serialNumberChars) {
-            serialNumberChars.forEach((octet: string) => {
-                buffer.writeUInt8(parseInt(octet, 16), offset);
-                offset++;
-            });
-        }
-        buffer.writeInt8(0x04, offset);
-
-        let minus = false;
-        if (weatherUpdateDto.temperature < 0) {
-            minus = true;
-        }
-        let temp = weatherUpdateDto.temperature.toString().replace(/\D/g, '');
-        temp = temp.padEnd(4, '0').substring(0, 4);
-        let tempInt = parseInt(temp);
-        if (minus) {
-            tempInt = tempInt * -1;
-        }
-        buffer.writeInt16LE(tempInt, offset);
-        offset++;
-        offset++;
-        buffer.writeInt8(weatherUpdateDto.humidity, offset);
-        offset++;
-        buffer.writeInt8(weatherUpdateDto.airQuality, offset);
-
+        buffer.writeUInt8(0x02, 0);
+        buffer.writeUInt8(0x00, 1);
+        Buffer.from(serialNumber, 'hex').copy(buffer, 2, 0, 6);
+        buffer.writeUInt8(0x04, 8);
+        buffer.writeInt16LE(Math.round(weatherUpdateDto.temperature * 100), 9);
+        buffer.writeUInt8(weatherUpdateDto.humidity, 11);
+        buffer.writeUInt8(weatherUpdateDto.airQuality, 12);
         return buffer;
     }
 

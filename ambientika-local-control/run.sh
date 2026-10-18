@@ -8,6 +8,10 @@ log_info() {
     echo "[INFO] $1" >&2
 }
 
+log_warn() {
+    echo "[WARN] $1" >&2
+}
+
 log_error() {
     echo "[ERROR] $1" >&2
 }
@@ -33,7 +37,16 @@ MQTT_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_port // 1883')
 MQTT_USERNAME=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_username // ""')
 MQTT_PASSWORD=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.mqtt_password // ""')
 CLOUD_SYNC_ENABLED=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_sync_enabled // false')
-CLOUD_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_host // "185.214.203.87"')
+CLOUD_HOST=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_host // "app.ambientika.eu"')
+if [[ -z "$CLOUD_HOST" ]]; then
+    CLOUD_HOST="app.ambientika.eu"
+fi
+# The cloud moved away from this IP (#37); installs from before that still carry it as their
+# saved cloud_host option, which shows up as cloud_availability flapping (#98).
+if [[ "$CLOUD_HOST" == "185.214.203.87" ]]; then
+    log_warn "⚠️  cloud_host is set to 185.214.203.87, the old Ambientika cloud IP, which no longer answers."
+    log_warn "    Cloud sync will time out. Set cloud_host to app.ambientika.eu in the add-on configuration."
+fi
 CLOUD_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.cloud_port // 11000')
 DEVICE_STALE_TIMEOUT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.device_stale_timeout // 90')
 REST_API_PORT=$(cat "$CONFIG_PATH" 2>/dev/null | jq -r '.rest_api_port // 3000')
@@ -95,7 +108,7 @@ HOME_ASSISTANT_SELECT_DISCOVERY_TOPIC=homeassistant/select/%serialNumber/%sensor
 HOME_ASSISTANT_BUTTON_DISCOVERY_TOPIC=homeassistant/button/%serialNumber/%sensorId/config
 
 HOME_ASSISTANT_DEVICE_NAME_PREFIX=Ambientika
-HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES="SMART,AUTO,MANUAL_HEAT_RECOVERY,NIGHT,AWAY_HOME,SURVEILLANCE,TIMED_EXPULSION,EXPULSION,INTAKE,MASTER_SLAVE_FLOW,SLAVE_MASTER_FLOW,OFF,SLAVE_OPPOSITE_MASTER,SLAVE_EQUAL_MASTER"
+HOME_ASSISTANT_CLIMATE_DISCOVERY_PRESET_MODES="SMART,AUTO,MANUAL_HEAT_RECOVERY,NIGHT,AWAY_HOME,SURVEILLANCE,TIMED_EXPULSION,EXPULSION,INTAKE,MASTER_SLAVE_FLOW,SLAVE_MASTER_FLOW,OFF"
 
 AVAILABILITY_TOPIC=ambientika/%serialNumber/availability
 CLOUD_AVAILABILITY_TOPIC=ambientika/%serialNumber/cloud_availability
@@ -114,6 +127,7 @@ TARGET_HUMIDITY_COMMAND_TOPIC=ambientika/%serialNumber/target_humidity/set
 CURRENT_AIR_QUALITY_TOPIC=ambientika/%serialNumber/air_quality
 HUMIDITY_ALARM_TOPIC=ambientika/%serialNumber/humidity_alarm
 FILTER_STATUS_TOPIC=ambientika/%serialNumber/filter_status
+ZONE_FILTER_STATUS_TOPIC=ambientika/%serialNumber/zone_filter_status
 FILTER_RESET_TOPIC=ambientika/%serialNumber/filter_reset
 FAN_STATUS_TOPIC=ambientika/%serialNumber/fan_status
 FAN_MODE_TOPIC=ambientika/%serialNumber/fan_mode

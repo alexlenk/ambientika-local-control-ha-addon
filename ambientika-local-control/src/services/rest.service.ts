@@ -8,19 +8,12 @@ import {OperatingModeDto} from '../dto/operating-mode.dto';
 import {DeviceDto} from '../dto/device.dto';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
 import {registerSerialForMasking} from './logger.service';
-import {OperatingMode} from '../models/enum/operating-mode.enum';
-import {FanSpeed} from '../models/enum/fan-speed.enum';
-import {HumidityLevel} from '../models/enum/humidity-level.enum';
-import {LightSensitivity} from '../models/enum/light-sensitivity.enum';
 import {DeviceRole} from '../models/enum/device-role.enum';
+import {validateOperatingMode, validateWeatherUpdate} from './command-validator';
 
 dotenv.config()
 
 const SERIAL_NUMBER_PATTERN = /^[0-9a-f]{12}$/i;
-
-function isValidEnumKey<T extends Record<string, string | number>>(enumObj: T, value: unknown, exclude: string[] = []): boolean {
-    return typeof value === 'string' && !exclude.includes(value) && typeof enumObj[value as keyof T] === 'number';
-}
 
 export class RestService {
     private server!: Server;
@@ -96,20 +89,9 @@ export class RestService {
 
         app.post("/device/operating-mode/:serialNumber", (request: Request, response: Response) => {
             const dto = request.body as OperatingModeDto;
-            if (dto.operatingMode !== undefined && !isValidEnumKey(OperatingMode, dto.operatingMode, ['LAST'])) {
-                response.status(400).send(`Invalid operatingMode: ${dto.operatingMode}`);
-                return;
-            }
-            if (dto.fanSpeed !== undefined && !isValidEnumKey(FanSpeed, dto.fanSpeed)) {
-                response.status(400).send(`Invalid fanSpeed: ${dto.fanSpeed}`);
-                return;
-            }
-            if (dto.humidityLevel !== undefined && !isValidEnumKey(HumidityLevel, dto.humidityLevel)) {
-                response.status(400).send(`Invalid humidityLevel: ${dto.humidityLevel}`);
-                return;
-            }
-            if (dto.lightSensitivity !== undefined && !isValidEnumKey(LightSensitivity, dto.lightSensitivity)) {
-                response.status(400).send(`Invalid lightSensitivity: ${dto.lightSensitivity}`);
+            const error = validateOperatingMode(dto);
+            if (error) {
+                response.status(400).send(error);
                 return;
             }
             this.eventService.deviceOperatingModeUpdate(dto, request.params.serialNumber as string);
@@ -123,18 +105,9 @@ export class RestService {
 
         app.post("/device/weather-update", (request: Request, response: Response) => {
             const dto = request.body as WeatherUpdateDto;
-            if (typeof dto.temperature !== 'number' || !Number.isFinite(dto.temperature) || dto.temperature < -50 || dto.temperature > 60) {
-                response.status(400).send(`Invalid temperature: ${dto.temperature}`);
-                return;
-            }
-            if (typeof dto.humidity !== 'number' || !Number.isInteger(dto.humidity) || dto.humidity < 0 || dto.humidity > 100) {
-                response.status(400).send(`Invalid humidity: ${dto.humidity}`);
-                return;
-            }
-            // airQuality is the raw 1-based wire value (device.mapper subtracts 1 to reach
-            // the 5-member AirQuality enum), so the valid range here is 1-5.
-            if (typeof dto.airQuality !== 'number' || !Number.isInteger(dto.airQuality) || dto.airQuality < 1 || dto.airQuality > 5) {
-                response.status(400).send(`Invalid airQuality: ${dto.airQuality}`);
+            const error = validateWeatherUpdate(dto);
+            if (error) {
+                response.status(400).send(error);
                 return;
             }
             this.eventService.deviceWeatherUpdate(dto);
@@ -150,6 +123,11 @@ export class RestService {
                 return;
             }
             const serialNumber = request.params.serialNumber as string;
+            // Express 5 leaves request.body undefined when no JSON body was sent.
+            if (typeof request.body !== 'object' || request.body === null) {
+                response.status(400).send('Invalid request body: expected a JSON object');
+                return;
+            }
             const { role = 0, zone = 0, houseId = 0 } = request.body;
             if (!Number.isInteger(role) || DeviceRole[role] === undefined) {
                 response.status(400).send(`Invalid role: ${role}`);

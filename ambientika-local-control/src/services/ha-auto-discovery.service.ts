@@ -90,6 +90,13 @@ export class HAAutoDiscoveryService {
         return this.getSensorDiscoveryMessage('filter_status', process.env.FILTER_STATUS_TOPIC, device, attributes);
     }
 
+    getZoneFilterStatusSensorMessage(device: Device): string {
+        const attributes: HaAutoDiscoverDeviceAttributes = {
+            icon: 'mdi:air-filter'
+        };
+        return this.getSensorDiscoveryMessage('zone_filter_status', process.env.ZONE_FILTER_STATUS_TOPIC, device, attributes);
+    }
+
     getFanStatusSensorMessage(device: Device): string {
         const attributes: HaAutoDiscoverDeviceAttributes = {
             icon: 'mdi:fan-remove'

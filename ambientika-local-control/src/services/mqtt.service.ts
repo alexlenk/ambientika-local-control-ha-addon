@@ -15,6 +15,7 @@ import {DeviceMapper} from './device.mapper';
 import {WeatherUpdateDto} from '../dto/weather-update.dto';
 import {DeviceSetupDto} from '../dto/device-setup.dto';
 import {DeviceBroadcastStatus} from '../models/device-broadcast-status.model';
+import {validateDeviceSetup, validateOperatingMode, validateWeatherUpdate} from './command-validator';
 
 dotenv.config()
 
@@ -72,6 +73,12 @@ export class MqttService {
         this.mqttClient = connect(this.mqttConnectionString, options);
         this.mqttClient.on('connect', () => {
             this.subscribeToTopic(process.env.HOME_ASSISTANT_STATUS_TOPIC || 'homeassistant/status');
+            // The weather topic is shared by all devices, so it's subscribed once per connection
+            // rather than per device — a per-device unsubscribe on DEVICE_OFFLINE dropped it for
+            // every device (#92).
+            if (process.env.WEATHER_UPDATE_TOPIC) {
+                this.subscribeToTopic(process.env.WEATHER_UPDATE_TOPIC);
+            }
             this.log.info(`MQTT broker connected`);
         });
         this.mqttClient.on('reconnect', () => {
@@ -139,6 +146,7 @@ export class MqttService {
             this.sendDeviceAirQuality(device);
             this.sendHumidityAlarm(device);
             this.sendFilterStatus(device);
+            this.sendZoneFilterStatus(device);
             this.sendNightAlarm(device);
             this.sendLightSensitivity(device);
             
@@ -207,6 +215,11 @@ export class MqttService {
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
                     device.serialNumber, 'filterstatus');
                 this.publish(topic, filterStatusDiscovery);
+
+                const zoneFilterStatusDiscovery = this.hAAutoDiscoveryService.getZoneFilterStatusSensorMessage(device);
+                topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
+                    device.serialNumber, 'zonefilterstatus');
+                this.publish(topic, zoneFilterStatusDiscovery);
 
                 const humidityDiscovery = this.hAAutoDiscoveryService.getHumidityStatusSensorMessage(device);
                 topic = this.getDeviceSensorPublishTopic(process.env.HOME_ASSISTANT_SENSOR_DISCOVERY_TOPIC,
@@ -340,6 +353,17 @@ export class MqttService {
     private sendFilterStatus(device: Device) {
         this.publish(this.getDevicePublishTopic(process.env.FILTER_STATUS_TOPIC, device.serialNumber),
             device.filterStatus.toString())
+    }
+
+    // A slave's own filter flag can't be cleared by any reset path; the zone master's flag
+    // is what the official app shows for the zone, so publish that for every device (#88).
+    private sendZoneFilterStatus(device: Device) {
+        this.deviceStorageService.findZoneMaster(device.serialNumber, (master: DeviceDto | undefined) => {
+            if (master) {
+                this.publish(this.getDevicePublishTopic(process.env.ZONE_FILTER_STATUS_TOPIC, device.serialNumber),
+                    master.filterStatus.toString());
+            }
+        });
     }
 
     private sendNightAlarm(device: Device) {
@@ -514,7 +538,6 @@ export class MqttService {
         if (process.env.ENABLE_RAW_COMMANDS === 'true') {
             topics.push((process.env.RAW_COMMAND_TOPIC || '').replace('%serialNumber', serialNumber));
         }
-        topics.push((process.env.WEATHER_UPDATE_TOPIC || ''));
         return topics;
     }
 
@@ -594,6 +617,11 @@ export class MqttService {
     private handleWeatherUpdate(message: Buffer): void {
         try {
             const weatherUpdate = JSON.parse(message.toString()) as WeatherUpdateDto;
+            const error = validateWeatherUpdate(weatherUpdate);
+            if (error) {
+                this.log.warn(`Ignoring weather update: ${error}`);
+                return;
+            }
             this.eventService.deviceWeatherUpdate(weatherUpdate);
         } catch (err) {
             this.log.error('Failed to parse weather update message:', err);
@@ -611,6 +639,11 @@ export class MqttService {
     private handleDeviceSetup(serialNumber: string, message: Buffer): void {
         try {
             const deviceSetupDto = JSON.parse(message.toString()) as DeviceSetupDto;
+            const error = validateDeviceSetup(deviceSetupDto?.deviceRole, deviceSetupDto?.zoneIndex, deviceSetupDto?.houseId);
+            if (error) {
+                this.log.error(`Invalid device setup for ${serialNumber}: ${error}`);
+                return;
+            }
             deviceSetupDto.serialNumber = serialNumber; // Ensure serial number matches topic
             this.log.info(`Device setup received for ${serialNumber}: ${JSON.stringify(deviceSetupDto)}`);
             this.eventService.deviceSetupUpdate(deviceSetupDto);
@@ -623,16 +656,9 @@ export class MqttService {
         try {
             const jsonSetup = JSON.parse(message.toString()) as DeviceSetupJsonDto;
             
-            // Validate required fields
-            if (!jsonSetup.role || jsonSetup.zone === undefined || jsonSetup.houseId === undefined) {
-                this.log.error(`Invalid JSON setup for ${serialNumber}: missing required fields (role, zone, houseId)`);
-                return;
-            }
-            
-            // Validate role
-            const validRoles = ['MASTER', 'SLAVE_EQUAL_MASTER', 'SLAVE_OPPOSITE_MASTER'];
-            if (!validRoles.includes(jsonSetup.role)) {
-                this.log.error(`Invalid device role '${jsonSetup.role}' for ${serialNumber}. Valid roles: ${validRoles.join(', ')}`);
+            const error = validateDeviceSetup(jsonSetup?.role, jsonSetup?.zone, jsonSetup?.houseId);
+            if (error) {
+                this.log.error(`Invalid JSON setup for ${serialNumber}: ${error} (expected role MASTER/SLAVE_EQUAL_MASTER/SLAVE_OPPOSITE_MASTER, zone 0-15, houseId)`);
                 return;
             }
             
@@ -778,10 +804,24 @@ export class MqttService {
     }
 
     private getOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
+        const dto = this.buildOperatingDtoFromTopic(serialNumber, topic, message);
+        const error = dto && validateOperatingMode(dto, true);
+        if (error) {
+            this.log.warn(`Ignoring command for ${serialNumber}: ${error}`);
+            return undefined;
+        }
+        return dto;
+    }
+
+    private buildOperatingDtoFromTopic(serialNumber: string, topic: string, message: Buffer): OperatingModeDto | undefined {
         const dto: OperatingModeDto = {} as OperatingModeDto;
         const messageString = message.toString();
         switch (topic) {
             case process.env.TARGET_HUMIDITY_COMMAND_TOPIC?.replace('%serialNumber', serialNumber):
+                if (Number.isNaN(parseInt(messageString))) {
+                    this.log.warn(`Invalid target humidity '${messageString}' received, ignoring command`);
+                    return undefined;
+                }
                 dto.humidityLevel = this.getHumidityLevel(messageString);
                 return dto;
             case process.env.FAN_MODE_COMMAND_TOPIC?.replace('%serialNumber', serialNumber): {
@@ -809,14 +849,16 @@ export class MqttService {
         return undefined;
     }
 
+    // Returns the enum *name* — the command builder looks levels up by name, and the numeric
+    // string ("1") it used to get resolved to DRY on the wire (#89).
     private getHumidityLevel(humidityLevel: string): string {
         const humidityLevelNumber = parseInt(humidityLevel);
         if (humidityLevelNumber <= 40) {
-            return HumidityLevel.DRY.toString()
+            return HumidityLevel[HumidityLevel.DRY];
         } else if (humidityLevelNumber > 40 && humidityLevelNumber <= 60) {
-            return HumidityLevel.NORMAL.toString()
+            return HumidityLevel[HumidityLevel.NORMAL];
         } else {
-            return HumidityLevel.MOIST.toString()
+            return HumidityLevel[HumidityLevel.MOIST];
         }
     }
 

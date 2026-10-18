@@ -85,6 +85,9 @@ export class RemoteSocketService {
 
         remoteSocket.on('data', (data: Buffer) => {
             this.log.silly(`Received data on remote socket for ${localAddress} %o`, data);
+            if (data.length >= 8) {
+                this.log.info(`Cloud command → device ${data.subarray(2, 8).toString('hex')}: ${this.deviceMapper.describeCommand(data)}`);
+            }
             this.eventService.remoteSocketDataUpdateReceived(data, localAddress);
             if (data.length === 9) {
                 const deviceFilterReset = this.deviceMapper.deviceFilterResetFromSocketBuffer(data);

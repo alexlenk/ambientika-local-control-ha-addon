@@ -105,7 +105,7 @@ Ambientika app will show them as offline.
 | Option | Default | Description |
 |--------|---------|-------------|
 | `cloud_sync_enabled` | `false` | Forward device traffic to Ambientika cloud |
-| `cloud_host` | `185.214.203.87` | Ambientika cloud IP |
+| `cloud_host` | `app.ambientika.eu` | Ambientika cloud host (hostname or IP). The old IP `185.214.203.87` no longer answers — if your saved configuration still has it, change it to `app.ambientika.eu` |
 | `cloud_port` | `11000` | Ambientika cloud TCP port |
 
 ---

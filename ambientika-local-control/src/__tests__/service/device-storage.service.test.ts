@@ -19,6 +19,11 @@ function makeDevice(sn = 'aabbccddeeff'): Device {
         false, 'GOOD', false, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
 }
 
+function makeRoleDevice(sn: string, role: string, filterStatus = 'GOOD'): Device {
+    return new Device(sn, 'AUTO', 'LOW', 'NORMAL', 22, 55, 'GOOD',
+        false, filterStatus, false, role, 'SMART', 'LOW', '192.168.1.1', 80);
+}
+
 function makeAlarmedDevice(sn = 'aabbccddeeff'): Device {
     return new Device(sn, 'AUTO', 'LOW', 'NORMAL', 22, 55, 'GOOD',
         true, 'GOOD', true, 'MASTER', 'SMART', 'LOW', '192.168.1.1', 80);
@@ -71,6 +76,97 @@ describe('DeviceStorageService', () => {
             device.fanSpeed = 'HIGH';
             eventService.deviceStatusUpdate(device);
             expect(service.hasStoredCommand('aabbccddeeff')).toBe(false);
+        });
+    });
+
+    describe('command override expiry, merging and LAST resolution (#91)', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('keeps the override for 30 s, then falls back to the device-reported state', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+
+            vi.advanceTimersByTime(30000);
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('NIGHT');
+
+            vi.advanceTimersByTime(1);
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+            expect(service.hasStoredCommand('aabbccddeeff')).toBe(false);
+        });
+
+        it('expires a command the device rejects instead of pinning it forever', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'NIGHT' }, 'aabbccddeeff');
+            eventService.deviceStatusUpdate(makeDevice()); // still reports AUTO
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('NIGHT');
+
+            vi.advanceTimersByTime(30001);
+            eventService.deviceStatusUpdate(makeDevice());
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+        });
+
+        it('merges separate attribute commands instead of replacing them', () => {
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'INTAKE' }, 'aabbccddeeff');
+
+            expect(service.getStoredFanSpeed('aabbccddeeff')).toBe('HIGH');
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('INTAKE');
+        });
+
+        it('a newer command restarts the expiry window', () => {
+            vi.useFakeTimers();
+            eventService.deviceOperatingModeUpdate({ fanSpeed: 'HIGH' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(20000);
+            eventService.deviceOperatingModeUpdate({ operatingMode: 'INTAKE' }, 'aabbccddeeff');
+            vi.advanceTimersByTime(20000);
+
+            expect(service.getStoredFanSpeed('aabbccddeeff')).toBe('HIGH');
+        });
+
+        it("stores fan_only (LAST) as the device's last operating mode, never as '12'", () => {
+            service.saveDevice(makeDevice()); // lastOperatingMode = SMART
+            eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff');
+
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBe('SMART');
+        });
+
+        it('stores no mode override for LAST when the device is unknown', () => {
+            eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff');
+
+            expect(service.getStoredOperatingMode('aabbccddeeff')).toBeUndefined();
+        });
+
+        it('does not mutate the command object other listeners receive', () => {
+            service.saveDevice(makeDevice());
+            const opMode = { operatingMode: '12' };
+            eventService.deviceOperatingModeUpdate(opMode, 'aabbccddeeff');
+
+            expect(opMode.operatingMode).toBe('12');
+        });
+
+        it('logs instead of throwing when resolving LAST fails', () => {
+            service.close();
+            expect(() => eventService.deviceOperatingModeUpdate({ operatingMode: '12' }, 'aabbccddeeff')).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching device from db', expect.any(Error));
+        });
+    });
+
+    describe('callback errors are not reported as DB errors (#93)', () => {
+        const boom = () => { throw new Error('caller bug'); };
+
+        it.each([
+            ['findExistingDeviceBySerialNumber', (svc: DeviceStorageService) => svc.findExistingDeviceBySerialNumber('aabbccddeeff', boom)],
+            ['findExistingDeviceByRemoteAddress', (svc: DeviceStorageService) => svc.findExistingDeviceByRemoteAddress('192.168.1.1', boom)],
+            ['getDevices', (svc: DeviceStorageService) => svc.getDevices(boom)],
+            ['findZoneMaster', (svc: DeviceStorageService) => svc.findZoneMaster('aabbccddeeff', boom)],
+        ])('%s: logs a callback exception as such and does not rethrow', (_name, call) => {
+            service.saveDevice(makeDevice());
+
+            expect(() => call(service)).not.toThrow();
+            expect(mockLog.error).toHaveBeenCalledWith('Error while handling device lookup result', expect.objectContaining({ message: 'caller bug' }));
+            expect(mockLog.error).not.toHaveBeenCalledWith(expect.stringContaining('Error fetching'), expect.anything());
         });
     });
 
@@ -242,6 +338,86 @@ describe('DeviceStorageService', () => {
                 expect.stringContaining('Error saving zone/houseId'),
                 expect.any(Error)
             );
+        });
+    });
+
+    describe('findZoneMaster (#88)', () => {
+        const MASTER = '111111111111';
+        const SLAVE = '222222222222';
+        const OTHER_MASTER = '333333333333';
+
+        function find(serialNumber: string): DeviceDto | undefined {
+            const callback = vi.fn();
+            service.findZoneMaster(serialNumber, callback);
+            expect(callback).toHaveBeenCalledTimes(1);
+            return callback.mock.calls[0]![0];
+        }
+
+        it('resolves a master to itself', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            expect(find(MASTER)?.serialNumber).toBe(MASTER);
+        });
+
+        it('resolves a slave to the master with the same zone and houseId', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER', 'BAD'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_OPPOSITE_MASTER'));
+            service.saveDevice(makeRoleDevice(OTHER_MASTER, 'MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 12048);
+            service.saveDeviceZoneHouseId(SLAVE, 1, 12048);
+            service.saveDeviceZoneHouseId(OTHER_MASTER, 0, 12048);
+
+            const master = find(SLAVE);
+            expect(master?.serialNumber).toBe(MASTER);
+            expect(master?.filterStatus).toBe('BAD');
+        });
+
+        it('does not match a master of the same zone index in a different house', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 99999);
+            service.saveDeviceZoneHouseId(SLAVE, 1, 12048);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('matches by zone alone when the slave houseId is unknown and the match is unique', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 2, 12048);
+            service.saveDeviceZoneHouseId(SLAVE, 2, undefined);
+
+            expect(find(SLAVE)?.serialNumber).toBe(MASTER);
+        });
+
+        it('resolves to undefined when more than one master matches', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(OTHER_MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 2, 1);
+            service.saveDeviceZoneHouseId(OTHER_MASTER, 2, 2);
+            service.saveDeviceZoneHouseId(SLAVE, 2, undefined);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('resolves to undefined when the slave zone is unknown', () => {
+            service.saveDevice(makeRoleDevice(MASTER, 'MASTER'));
+            service.saveDevice(makeRoleDevice(SLAVE, 'SLAVE_EQUAL_MASTER'));
+            service.saveDeviceZoneHouseId(MASTER, 1, 12048);
+
+            expect(find(SLAVE)).toBeUndefined();
+        });
+
+        it('resolves to undefined for an unknown device', () => {
+            expect(find('ffffffffffff')).toBeUndefined();
+        });
+
+        it('logs an error and does not call back when the query fails', () => {
+            service.close();
+            const callback = vi.fn();
+            service.findZoneMaster(MASTER, callback);
+            expect(callback).not.toHaveBeenCalled();
+            expect(mockLog.error).toHaveBeenCalledWith('Error fetching zone master from db', expect.any(Error));
         });
     });
 

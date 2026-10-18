@@ -187,6 +187,26 @@ export class DeviceMapper {
         return new DeviceBroadcastStatus(serialNumber, allSerialNumbers, zoneIndex, fanMode ?? 'UNKNOWN', fanStatus ?? 'UNKNOWN', houseId)
     }
 
+    // Human-readable name of a cloud→device frame, for an info-level log line that makes
+    // cloud commands visible without silly logging (#88). Layouts per the README protocol
+    // reference: byte 8 is the command type of 9- and 13-byte frames.
+    describeCommand(data: Buffer): string {
+        const commandType = data.length > 8 ? data.readUInt8(8) : undefined;
+        if (data.length === 9 && commandType === 3) {
+            return 'FILTER_RESET';
+        }
+        if (data.length === 13 && (commandType === 0 || commandType === 1)) {
+            return 'OPERATING_MODE';
+        }
+        if (data.length === 13 && commandType === 4) {
+            return 'WEATHER_UPDATE';
+        }
+        if (data.length === 15 || data.length === 16) {
+            return 'DEVICE_SETUP';
+        }
+        return `UNKNOWN (${data.length} bytes)`;
+    }
+
     private getHexStringFromBufferSlice(start: number, end: number): string {
         if (this.buffer.length >= end) {
             const slice = this.buffer.subarray(start, end)
