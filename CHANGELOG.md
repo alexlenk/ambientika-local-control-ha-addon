@@ -13,7 +13,6 @@ All notable changes to this project will be documented in this file.
 - **REST API on Express 5**: requests to `/device/operating-mode`, `/device/weather-update` or the debug setup endpoint without a JSON body now get `400 Bad Request` instead of a server error (Express 5 no longer defaults the body to `{}`).
 - **Dependencies**: `proxy-addr` 2.0.8 and `qs` 6.16.1 (transitive, via Express) fix GHSA-jqcg-44mw-7w3h and GHSA-x5fp-wj9c-mxmx / GHSA-4mjr-xmp4-gh2g. `npm audit --omit=dev` is clean.
 - The unidentified 8-byte `04 00 <MAC>` packet that masters send every few seconds is now logged at `debug` instead of `warn`. (#88)
-
 - **HA keeps showing a just-sent command for up to 30 s, then the device's real state**: the add-on publishes the last commanded mode/fan speed so HA doesn't jump back to the old value while the device applies it. That override used to stay until the device reported exactly the commanded value, so a rejected command, or `fan_only` (shown as preset `12`), stuck in HA indefinitely. It now expires after 30 s, `fan_only` is shown as the mode it actually resolves to, and fan speed and mode sent as separate messages no longer overwrite each other. (#91)
 - **MQTT commands are validated like REST ones**: an unknown preset/mode (previously sent to the unit as SMART), light sensitivity, non-numeric target humidity, out-of-range weather values, or setup role/zone/house ID are now ignored with a log message instead of producing a wrong command. Errors in internal lookups are no longer misreported as `Error fetching device from db`. (#93)
 
